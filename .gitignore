@@ -1,0 +1,28 @@
+# Personal handwriting samples - NEVER publish them (they are biometric-like personal data)
+skill/my-handwriting/data/
+data/
+my-handwriting-glyphs-*.json
+handschrift-glyphs-*.json
+*.glyphs.json
+my-handwriting-skill.zip
+
+# Output files
+*.pdf
+*.png
+!icons/*.png
+*.svg
+!icon.svg
+!icons/*.svg
+out/
+
+# Local backups / scratch
+_original_*/
+*.tmp
+*.bak
+__pycache__/
+*.pyc
+.venv/
+.claude/settings.local.json
+Thumbs.db
+desktop.ini
+.DS_Store

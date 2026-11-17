@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Teach the computer your handwriting – write each character a few times, then turn any text into your handwriting (PNG, SVG, PDF). Runs offline, nothing is uploaded.">
+<meta name="theme-color" content="#1f2f86">
+<title>My Handwriting</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<header>
+  <h1><img src="icon.svg" alt="" width="26" height="26"> <span data-i18n="app.title">My Handwriting</span></h1>
+  <div class="progress"><div class="bar"><i id="barFill"></i></div><span id="progressText">0 %</span></div>
+  <button class="badge" id="penBadge" type="button" data-i18n-title="pen.badgeTitle" data-i18n="pen.badge"></button>
+  <span class="status" id="saveStatus" data-i18n="save.loading">…</span>
+  <div class="hdr-btns">
+    <button id="btnWrite" class="accent" type="button" data-i18n-title="hdr.write">✍️<span class="lbl" data-i18n="hdr.write"></span></button>
+    <button id="btnImport" type="button" data-i18n-title="hdr.import">📂<span class="lbl" data-i18n="hdr.import"></span></button>
+    <button id="btnExport" class="primary" type="button" data-i18n-title="hdr.export">💾<span class="lbl" data-i18n="hdr.export"></span></button>
+    <button id="btnSettings" type="button" data-i18n-title="hdr.settings" data-i18n-aria="hdr.settings">⚙︎</button>
+    <button id="btnHelp" type="button" data-i18n-title="hdr.help" data-i18n-aria="hdr.help">?</button>
+    <select id="langSel" data-i18n-title="hdr.lang" data-i18n-aria="hdr.lang"></select>
+  </div>
+  <input type="file" id="fileInput" accept=".json,application/json" hidden>
+</header>
+
+<div class="layout">
+<main>
+  <div class="prompt">
+    <div class="target" id="targetChar">A</div>
+    <div class="pinfo">
+      <div class="name" id="charName"></div>
+      <div class="meta" id="charMeta"></div>
+      <div class="hint" id="charHint"></div>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+
+  <div class="padwrap" id="padwrap"><canvas id="pad" data-i18n-aria="pad.aria"></canvas></div>
+
+  <div class="controls">
+    <button id="btnBack" type="button" data-i18n="ctl.back" data-i18n-title="ctl.backTitle"></button>
+    <button id="btnSkip" type="button" data-i18n="ctl.skip" data-i18n-title="ctl.skipTitle"></button>
+    <span class="spacer"></span>
+    <button id="btnTemplate" type="button" class="toggle" data-i18n-title="ctl.templateTitle">👁<span class="lbl" data-i18n="ctl.template"></span></button>
+    <button id="btnUndo" type="button" data-i18n="ctl.undo" data-i18n-title="ctl.undoTitle"></button>
+    <button id="btnClear" type="button" data-i18n="ctl.clear" data-i18n-title="ctl.clearTitle"></button>
+    <button id="btnSave" type="button" class="primary" data-i18n="ctl.save" data-i18n-title="ctl.saveTitle"></button>
+  </div>
+  <div class="keys" data-i18n-html="keysHtml"></div>
+  <div class="banner" id="exportBanner"><span id="exportBannerText"></span><button id="bannerExport" type="button" class="primary" data-i18n="banner.exportNow"></button></div>
+  <div class="banner ok" id="doneBanner"><span data-i18n="banner.done"></span><button id="doneWrite" type="button" class="primary" data-i18n="banner.doneBtn"></button></div>
+
+  <div class="samples" id="samples"></div>
+</main>
+
+<aside id="overview"></aside>
+</div>
+
+<!-- Introduction / setup wizard -->
+<div class="modal-bg" id="mWizard"><div class="modal narrow wizard" role="dialog" aria-modal="true">
+  <div class="wiz-step" id="wizStep"></div>
+  <div id="wizBody"></div>
+  <div class="row">
+    <button type="button" id="wizSkip" data-i18n="wiz.skip"></button>
+    <span class="spacer"></span>
+    <button type="button" id="wizPrev" data-i18n="wiz.prev"></button>
+    <button type="button" id="wizNext" class="primary"></button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="mHelp"><div class="modal narrow" role="dialog" aria-modal="true">
+  <h2 data-i18n="help.title"></h2>
+  <div class="help" data-i18n-html="help.bodyHtml"></div>
+  <div class="help" data-i18n-html="help.claudeHtml"></div>
+  <div class="row">
+    <button type="button" id="helpRestart" data-i18n="help.restart"></button>
+    <span class="spacer"></span>
+    <button type="button" class="primary" data-close data-i18n="btn.close"></button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="mExport"><div class="modal narrow" role="dialog" aria-modal="true">
+  <h2 data-i18n="export.title"></h2>
+  <p id="exportInfo"></p>
+  <p class="small" data-i18n="export.hint"></p>
+  <p class="small" id="exportClaude"></p>
+  <div class="row">
+    <button type="button" id="btnCopy" data-i18n="export.copy"></button>
+    <button type="button" id="btnShowJson" data-i18n="export.show"></button>
+    <span class="spacer"></span>
+    <button type="button" class="primary" data-close data-i18n="btn.done"></button>
+  </div>
+  <textarea id="exportText" readonly class="mono"></textarea>
+</div></div>
+
+<div class="modal-bg" id="mImport"><div class="modal narrow" role="dialog" aria-modal="true">
+  <h2 data-i18n="import.title"></h2>
+  <p id="importInfo"></p>
+  <div class="row">
+    <button type="button" data-close data-i18n="btn.cancel"></button>
+    <span class="spacer"></span>
+    <button type="button" id="btnImportReplace" class="danger" data-i18n="import.replace"></button>
+    <button type="button" id="btnImportMerge" class="primary" data-i18n="import.merge"></button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="mWrite"><div class="modal wide" role="dialog" aria-modal="true">
+  <h2 data-i18n="write.title"></h2>
+  <div class="write-grid">
+    <div class="write-form">
+      <textarea id="wText" rows="6"></textarea>
+      <div class="small" data-i18n="write.tip"></div>
+      <div class="fields">
+        <label><span data-i18n="write.size"></span>
+          <select id="wSize"><option value="3.5">3,5 mm</option><option value="4">4 mm</option><option value="5">5 mm</option><option value="6">6 mm</option><option value="8">8 mm</option><option value="10">10 mm</option><option value="14">14 mm</option><option value="20">20 mm</option></select></label>
+        <label><span data-i18n="write.paper"></span>
+          <select id="wPaper"><option value="blank" data-i18n="paper.blank"></option><option value="lined" data-i18n="paper.lined"></option><option value="grid" data-i18n="paper.grid"></option></select></label>
+        <label><span data-i18n="write.page"></span>
+          <select id="wPage"><option value="a4" data-i18n="page.a4"></option><option value="a5" data-i18n="page.a5"></option><option value="letter" data-i18n="page.letter"></option><option value="auto" data-i18n="page.auto"></option></select></label>
+        <label><span data-i18n="write.color"></span>
+          <select id="wColor"><option value="blue" data-i18n="color.blue"></option><option value="royal" data-i18n="color.royal"></option><option value="black" data-i18n="color.black"></option><option value="pencil" data-i18n="color.pencil"></option><option value="red" data-i18n="color.red"></option><option value="green" data-i18n="color.green"></option></select></label>
+        <label><span data-i18n="write.align"></span>
+          <select id="wAlign"><option value="left" data-i18n="align.left"></option><option value="center" data-i18n="align.center"></option><option value="right" data-i18n="align.right"></option></select></label>
+        <label><span data-i18n="write.variation"></span>
+          <input type="range" id="wVar" min="0" max="2" step="0.1"></label>
+      </div>
+      <label class="check"><input type="checkbox" id="wMarkdown"> <span data-i18n="write.markdown"></span></label>
+      <label class="check"><input type="checkbox" id="wFallback"> <span data-i18n="write.fallbackOn"></span></label>
+      <label class="check"><input type="checkbox" id="wTransparent"> <span data-i18n="write.transparent"></span></label>
+    </div>
+    <div class="write-preview">
+      <div class="row tight">
+        <button type="button" id="wReroll" data-i18n="write.reroll"></button>
+        <span class="spacer"></span>
+        <span class="small" data-i18n="write.download"></span>
+        <button type="button" id="wPng" class="primary">PNG</button>
+        <button type="button" id="wSvg">SVG</button>
+        <button type="button" id="wPdf">PDF</button>
+      </div>
+      <div class="missing" id="wInfo"></div>
+      <div class="wcanvas"><canvas id="wCanvas"></canvas></div>
+    </div>
+  </div>
+  <div class="row"><span class="spacer"></span><button type="button" class="primary" data-close data-i18n="btn.close"></button></div>
+</div></div>
+
+<div class="modal-bg" id="mSettings"><div class="modal narrow" role="dialog" aria-modal="true">
+  <h2 data-i18n="set.title"></h2>
+  <label class="f" for="setLang" data-i18n="set.lang"></label>
+  <select id="setLang"></select>
+  <label class="f" for="setTarget" data-i18n="set.target"></label>
+  <input type="number" id="setTarget" min="1" max="50" step="1"> <span class="small" data-i18n="set.targetHint"></span>
+  <label class="f" data-i18n="set.scripts"></label>
+  <div class="scripts" id="setScripts"></div>
+  <div class="small" data-i18n="set.scriptsHint"></div>
+  <label class="f" data-i18n="set.template"></label>
+  <label class="check"><input type="checkbox" id="setTemplate"> <span data-i18n="set.templateOn"></span></label>
+  <div class="range-row"><span data-i18n="set.templateAlpha"></span> <input type="range" id="setAlpha" min="0.04" max="0.4" step="0.01"> <span id="setAlphaVal" class="small"></span></div>
+  <div class="small" data-i18n="set.templateHint"></div>
+  <label class="f" data-i18n="set.fallback"></label>
+  <label class="check"><input type="checkbox" id="setFallback"> <span data-i18n="set.fallbackOn"></span></label>
+  <div class="small" data-i18n="set.fallbackHint"></div>
+  <label class="f" data-i18n="set.claude"></label>
+  <div class="fields">
+    <label><span data-i18n="set.claudeLang"></span><select id="setClaudeLang"></select></label>
+    <label><span data-i18n="write.paper"></span><select id="setClaudePaper"></select></label>
+    <label><span data-i18n="write.size"></span><select id="setClaudeSize"></select></label>
+    <label><span data-i18n="write.color"></span><select id="setClaudeColor"></select></label>
+    <label><span data-i18n="write.page"></span><select id="setClaudePage"></select></label>
+  </div>
+  <div class="small" data-i18n="set.claudeHint"></div>
+  <label class="f" for="setMode" data-i18n="set.mode"></label>
+  <select id="setMode"><option value="char" data-i18n="set.modeChar"></option><option value="round" data-i18n="set.modeRound"></option></select>
+  <label class="f" for="setPen" data-i18n="set.pen"></label>
+  <select id="setPen"><option value="auto" data-i18n="set.penAuto"></option><option value="off" data-i18n="set.penOff"></option><option value="on" data-i18n="set.penOn"></option></select>
+  <label class="f" for="setCustom" data-i18n="set.custom"></label>
+  <input type="text" id="setCustom" data-i18n-ph="set.customPh">
+  <div class="small" data-i18n="set.customHint"></div>
+  <label class="f" data-i18n="set.storage"></label>
+  <div class="small" id="storageInfo"></div>
+  <div class="row">
+    <button type="button" id="btnWipe" class="danger" data-i18n="set.wipe"></button>
+    <span class="spacer"></span>
+    <button type="button" data-close data-i18n="btn.cancel"></button>
+    <button type="button" id="btnSettingsSave" class="primary" data-i18n="btn.apply"></button>
+  </div>
+</div></div>
+
+<div id="toast" role="status"><span id="toastText"></span><button type="button" id="toastBtn"></button></div>
+
+<script src="js/i18n.js"></script>
+<script src="js/lang/en.js"></script>
+<script src="js/lang/de.js"></script>
+<script src="js/lang/fr.js"></script>
+<script src="js/lang/es.js"></script>
+<script src="js/lang/it.js"></script>
+<script src="js/lang/pl.js"></script>
+<script src="js/charsets.js"></script>
+<script src="js/fallback-font.js"></script>
+<script src="js/render.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

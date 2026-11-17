@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "my-handwriting",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "5311", "--bind", "127.0.0.1"],
+      "port": 5311
+    }
+  ]
+}

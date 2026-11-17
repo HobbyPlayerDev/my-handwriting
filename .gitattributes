@@ -1,0 +1,2 @@
+# Keep LF line endings everywhere (the generated font files are compared byte for byte in CI)
+* text=auto eol=lf

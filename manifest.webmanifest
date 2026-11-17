@@ -1,0 +1,14 @@
+{
+  "name": "My Handwriting",
+  "short_name": "Handwriting",
+  "description": "Teach the computer your handwriting and write any text with it. Offline, nothing is uploaded.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f7f5ef",
+  "theme_color": "#1f2f86",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

@@ -1,0 +1,28 @@
+name: tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pillow==11.1.0
+      - name: syntax
+        run: |
+          for f in js/*.js js/lang/*.js sw.js tests/*.js; do node --check "$f"; done
+          python -m py_compile skill/my-handwriting/scripts/my_handwriting.py tools/build_fallback_font.py tests/*.py
+      - name: standard handwriting is up to date
+        run: |
+          python tools/build_fallback_font.py
+          git diff --exit-code js/fallback-font.js skill/my-handwriting/scripts/fallback_font.json
+      - run: node tests/i18n_test.js
+      - run: mkdir -p out && python tests/make_fixture.py out/fx.json
+      - run: node tests/render_test.js out/fx.json
+      - run: python tests/py_test.py
