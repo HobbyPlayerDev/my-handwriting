@@ -17,3 +17,17 @@ Acknowledgements required by the Hershey font license (full text in `tools/hersh
   James Hurt, Cognition, Inc., 900 Technology Park Drive, Billerica, MA 01821.
 
 The data is stored here in its own JSON/JavaScript format (not the format distributed by the U.S. NTIS).
+
+## Icons
+
+The app icon and all interface icons (the SVG sprite in `index.html`, `icon.svg`, `icons/*.png`) were
+drawn for this project and are covered by the MIT License. The README pictures were made for this project
+too: the banner title (`docs/banner.png`) is drawn by hand, its subtitle and `docs/example.png` use the app's
+own standard handwriting (no handwriting samples). No icon fonts, emoji images or logos of
+other companies are included.
+
+## Trademarks
+
+Claude is a trademark of Anthropic, PBC. The name is only used to say that the skill works with
+Claude. My Handwriting is an independent project and is not affiliated with, sponsored or endorsed
+by Anthropic.

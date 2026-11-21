@@ -87,6 +87,8 @@ def main():
             glyphs[ch] = lst
     data = {"format": hs.FORMAT, "version": 1, "app": "fixture", "metrics": dict(hs.DEFAULT_METRICS),
             "settings": {"target": a.samples, "scripts": list(hs.LANG_ORDER)}, "glyphs": glyphs}
+    if os.path.dirname(a.out):
+        os.makedirs(os.path.dirname(a.out), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(data, fh, ensure_ascii=False)
     print("fixture: %d characters, %d samples -> %s" % (len(glyphs), sum(len(v) for v in glyphs.values()), a.out))

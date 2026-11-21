@@ -17,11 +17,12 @@ jobs:
       - name: syntax
         run: |
           for f in js/*.js js/lang/*.js sw.js tests/*.js; do node --check "$f"; done
-          python -m py_compile skill/my-handwriting/scripts/my_handwriting.py tools/build_fallback_font.py tests/*.py
-      - name: standard handwriting is up to date
+          python -m py_compile skill/my-handwriting/scripts/my_handwriting.py tools/build_fallback_font.py tools/build_skill_bundle.py tests/*.py
+      - name: generated files are up to date
         run: |
           python tools/build_fallback_font.py
-          git diff --exit-code js/fallback-font.js skill/my-handwriting/scripts/fallback_font.json
+          python tools/build_skill_bundle.py
+          git diff --exit-code js/fallback-font.js skill/my-handwriting/scripts/fallback_font.json js/skill-bundle.js
       - run: node tests/i18n_test.js
       - run: mkdir -p out && python tests/make_fixture.py out/fx.json
       - run: node tests/render_test.js out/fx.json

@@ -46,6 +46,18 @@ for (const v of ['blank', 'lined', 'grid']) ok(('paper.' + v) in en, 'paper.' + 
 for (const v of ['blue', 'royal', 'black', 'pencil', 'red', 'green']) ok(('color.' + v) in en, 'color.' + v);
 for (const v of ['a4', 'a5', 'letter', 'auto']) ok(('page.' + v) in en, 'page.' + v);
 
+// offline app: every file in sw.js exists, and every script/style/icon of index.html is cached
+const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
+const swFiles = JSON.parse(sw.match(/var FILES = (\[[\s\S]*?\]);/)[1].replace(/'/g, '"'));
+for (const f of swFiles) if (f !== './') ok(fs.existsSync(path.join(root, f)), 'sw.js lists a missing file: ' + f);
+for (const m of html.matchAll(/(?:src|href)="((?:js|css|icons)\/[^"]+|icon\.svg|manifest\.webmanifest)"/g)) ok(swFiles.includes(m[1]), 'not in sw.js FILES: ' + m[1]);
+// every icon used in the page or in app.js is drawn in the sprite
+const symbols = new Set([...html.matchAll(/<symbol id="i-([\w-]+)"/g)].map(m => m[1]));
+for (const m of html.matchAll(/href="#i-([\w-]+)"/g)) ok(symbols.has(m[1]), 'icon missing in sprite: ' + m[1]);
+for (const m of app.matchAll(/\bicon\('([\w-]+)'/g)) ok(symbols.has(m[1]), 'icon missing in sprite: ' + m[1]);
+// app.js has a local "history" (undo list): the browser history must be used as window.history
+ok(!/[^.\w]history\.(pushState|back|state|replaceState)/.test(app), 'use window.history (a local variable is called history)');
+
 // t() with placeholders, English default and fallback
 I18N.setLang('de'); ok(I18N.t('progress', { pct: 5, done: 1, chars: 2, n: 3 }).indexOf('5 %') === 0, 'de placeholder');
 I18N.setLang('xx'); ok(I18N.lang() === 'en', 'unknown language falls back to English');

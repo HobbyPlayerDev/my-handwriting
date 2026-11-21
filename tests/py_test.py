@@ -4,6 +4,7 @@
     python tests/py_test.py      (builds its own synthetic fixture; Pillow needed for it and for PNG)
 """
 import json
+import math
 import os
 import subprocess
 import sys
@@ -127,16 +128,67 @@ rep = json.loads(out)
 ok(code == 0 and rep["pages"] == 2 and rep["settings"]["markdown"], "markdown + page break: %s" % rep.get("pages"))
 ok(rep["settings"]["paper"] == "lined" and rep["settings"]["size"] == 6.0, "built-in Claude defaults: %s" % rep["settings"])
 withc = json.load(open(fx, encoding="utf-8"))
-withc["settings"]["claude"] = {"lang": "de", "paper": "grid", "size": 8, "color": "black", "page": "a5", "fallback": "box"}
+withc["settings"]["claude"] = {"lang": "de", "paper": "grid", "size": 8, "color": "black", "page": "a5", "fallback": "box", "realism": False,
+                               "align": "center", "variation": 0.4}
 cpath = os.path.join(tmp, "claude.json")
 json.dump(withc, open(cpath, "w", encoding="utf-8"))
 code, out, err = run("render", "--glyphs", cpath, "--text", "Hi", "--out", os.path.join(tmp, "c.pdf"), "--json")
 rep = json.loads(out)
-ok(rep["settings"] == {"paper": "grid", "size": 8.0, "color": "black", "page": "a5", "markdown": False, "font": False},
+ok(rep["settings"] == {"paper": "grid", "size": 8.0, "color": "black", "page": "a5", "align": "center", "irregularity": 20,
+                       "variation": 0.4, "landscape": False, "transparent": False, "markdown": False, "font": False, "realism": False},
    "defaults from the app: %s" % rep["settings"])
+ok(rep["settings_line"] == "Einstellungen: Größe: 8 mm · Papier: Kariert · Format: A5 · Farbe: Schwarz · Ausrichtung: Mitte · "
+   "Unregelmäßigkeit: 20 % · Echt wirken lassen: aus · Fehlende Zeichen ergänzen: aus", "settings line in the app's language: %s" % rep["settings_line"])
+code, out, err = run("render", "--glyphs", cpath, "--text", "Hi", "--out", os.path.join(tmp, "c3.png"), "--irregularity", "80", "--align", "right",
+                     "--color", "red", "--transparent")
+ok(code == 0 and out.splitlines()[0] == "Einstellungen: Größe: 8 mm · Papier: Kariert · Format: Passend zum Text · Farbe: Rot · "
+   "Ausrichtung: Rechts · Unregelmäßigkeit: 80 % · Echt wirken lassen: aus · Fehlende Zeichen ergänzen: aus · Transparenter Hintergrund: an",
+   "settings line first, with the changes from the chat: %s" % out.splitlines()[:1])
+code, out, err = run("render", "--glyphs", cpath, "--text", "Hi", "--out", os.path.join(tmp, "c4.pdf"), "--irregularity", "150")
+ok(code != 0 and "irregularity" in err, "--irregularity above 100 is refused")
+code, out, err = run("render", "--glyphs", fx, "--text", "Hi", "--out", os.path.join(tmp, "c5.pdf"), "--json")
+ok(json.loads(out)["settings_line"].startswith("Settings: Size: 6 mm · Paper: Lined · Format: A4 · Colour: Blue · Alignment: Left · Irregularity: 50 %"),
+   "settings line without app settings: English defaults")
+# the settings line uses exactly the words of the app (js/lang/<code>.js)
+for code_, labels in hs.SETTING_LABELS.items():
+    table = node("const I=require(process.argv[1]);require(process.argv[2]);console.log(JSON.stringify(I.TABLES[process.argv[3]]))",
+                 os.path.join(ROOT, "js", "i18n.js"), os.path.join(ROOT, "js", "lang", code_ + ".js"), code_)
+    diff = [k for k, v in zip(hs.SETTING_KEYS, labels) if k not in ("on", "off") and table.get(k) != v]
+    ok(not diff and len(labels) == len(hs.SETTING_KEYS), code_ + ": settings labels equal to the app: %s" % diff)
+ok(sorted(hs.SETTING_LABELS) == sorted(hs.LANG_ORDER) or set(hs.SETTING_LABELS) >= {"de", "en", "fr", "es", "it", "pl"}, "settings labels for all 6 languages")
 code, out, err = run("render", "--glyphs", cpath, "--text", "Hi", "--out", os.path.join(tmp, "c2.pdf"), "--json", "--paper", "blank", "--font")
 rep = json.loads(out)
 ok(rep["settings"]["paper"] == "blank" and rep["settings"]["font"], "command line beats the app defaults")
+# realism (tremor, stretch, pen pressure): on without a setting, off from the app, --realism wins
+code, out, err = run("render", "--glyphs", fx, "--text", "Hallo Welt", "--out", os.path.join(tmp, "r1.svg"), "--json", "--seed", "4")
+ok(code == 0 and json.loads(out)["settings"]["realism"] is True, "realism is on by default")
+svg_on = open(os.path.join(tmp, "r1.svg"), encoding="utf-8").read()
+ok(svg_on.count("stroke-linecap") > 3, "realism: several pen widths in the SVG")
+code, out, err = run("render", "--glyphs", cpath, "--text", "Hallo Welt", "--out", os.path.join(tmp, "r2.svg"), "--json", "--realism")
+ok(code == 0 and json.loads(out)["settings"]["realism"] is True, "--realism beats the app setting")
+code, out, err = run("render", "--glyphs", fx, "--text", "Hallo Welt", "--out", os.path.join(tmp, "r3.svg"), "--no-realism", "--seed", "4")
+ok(code == 0 and open(os.path.join(tmp, "r3.svg"), encoding="utf-8").read().count("stroke-linecap") == 1, "--no-realism: one even pen width")
+
+# "fit to text": a short page after [[pagebreak]] stays short (same as the web app)
+code, out, err = run("render", "--glyphs", fx, "--text", "one\ntwo\nthree\nfour\n[[pagebreak]]\nfive", "--markdown",
+                     "--out", os.path.join(tmp, "pb.svg"), "--json")
+_hs = [float(open(f, encoding="utf-8").read().split('height="')[1].split("mm")[0]) for f in json.loads(out)["files"]]
+ok(len(_hs) == 2 and _hs[1] < _hs[0] * 0.6, "fit to text: every page as high as its own lines: %s" % _hs)
+
+# kerning: a straight stem keeps only its end points (simplify) - the next letter must not slide into it
+def _bowl(y0, y1, w):
+    pts = []
+    for i in range(25):
+        a = -math.pi / 2 + math.pi * i / 24
+        pts += [round(100 + w * math.cos(a)), round((y0 + y1) / 2 + (y1 - y0) / 2 * math.sin(a))]
+    return pts
+_B = {"strokes": [[100, 0, 100, 1000], _bowl(1000, 520, 380), _bowl(520, 0, 450)]}
+_kfile = os.path.join(tmp, "stem.json")
+json.dump({"format": "my-handwriting-glyphs", "version": 1, "metrics": {"scale": 1000}, "glyphs": {"B": [_B, _B, _B]}}, open(_kfile, "w"))
+_gs = hs.GlyphSet(_kfile, 0, 0.0)
+_ts = hs.Typesetter(_gs, hs.random.Random(1), 0.0)
+_a, _b = _ts.glyph_box("B"), _ts.glyph_box("B")
+ok(hs.kern_offset(_a, _b, 0.15, 1.0) >= _a.w + 0.14, "kerning: no overlap with a straight stem (BB): %.3f vs %.3f" % (hs.kern_offset(_a, _b, 0.15, 1.0), _a.w + 0.15))
 
 # 5. info (what the skill reads first)
 code, out, err = run("info", "--glyphs", cpath)
@@ -185,6 +237,63 @@ ok(code == 2 and "Unknown file format" in err, "unknown format is refused")
 pdf = open(os.path.join(tmp, "out.pdf"), "rb").read()
 sx = int(pdf.rsplit(b"startxref\n", 1)[1].split(b"\n")[0])
 ok(pdf[sx:sx + 4] == b"xref", "pdf startxref")
+
+# 9. several handwritings in one skill (data/glyphs.json + data/glyphs-<name>.json)
+dest2 = os.path.join(tmp, "skills2", "my-handwriting")
+run("install", "--glyphs", fx, "--dest", dest2)
+oma = json.load(open(basic, encoding="utf-8"))
+oma["name"] = "Oma Érika"
+omap = os.path.join(tmp, "oma.json")
+json.dump(oma, open(omap, "w", encoding="utf-8"))
+code, out, err = run("install", "--glyphs", omap, "--name", "Oma Érika", "--dest", dest2)
+ok(code == 0 and os.path.isfile(os.path.join(dest2, "data", "glyphs-oma-erika.json")), "install --name: %s %s" % (out, err))
+inst2 = os.path.join(dest2, "scripts", "my_handwriting.py")
+p = subprocess.run([sys.executable, inst2, "info"], capture_output=True, env=dict(os.environ, MY_HANDWRITING_LANG="en"))
+info = json.loads(p.stdout.decode("utf-8"))
+ok([h["name"] for h in info["handwritings"]] == ["default", "Oma Érika"] and info["handwritings"][0]["default"], "info lists handwritings: %s" % info.get("handwritings"))
+p = subprocess.run([sys.executable, inst2, "render", "--profile", "oma erika", "--text", "Hi", "--out", os.path.join(tmp, "oma.svg"), "--json"],
+                   capture_output=True, env=dict(os.environ, MY_HANDWRITING_LANG="en"))
+ok(p.returncode == 0 and json.loads(p.stdout.decode("utf-8"))["glyphs"].endswith("glyphs-oma-erika.json"), "render --profile picks the other handwriting")
+p = subprocess.run([sys.executable, inst2, "render", "--profile", "nobody", "--text", "Hi", "--out", os.path.join(tmp, "n.svg")],
+                   capture_output=True, env=dict(os.environ, MY_HANDWRITING_LANG="en"))
+ok(p.returncode == 2 and b"Oma" in p.stderr, "unknown --profile lists the available ones")
+
+# 10. the web app's ZIP (js/zip.js + js/skill-bundle.js) works as a skill
+bundle_js = open(os.path.join(ROOT, "js", "skill-bundle.js"), encoding="utf-8").read()
+spec = __import__("importlib.util").util.spec_from_file_location("bsb", os.path.join(ROOT, "tools", "build_skill_bundle.py"))
+bsb = __import__("importlib.util").util.module_from_spec(spec)
+spec.loader.exec_module(bsb)
+fresh = bsb.bundle()
+try:
+    shipped = node("console.log(JSON.stringify(require(process.argv[1])))", os.path.join(ROOT, "js", "skill-bundle.js"))
+    ok(shipped == fresh, "js/skill-bundle.js is up to date (run tools/build_skill_bundle.py)")
+    zpath = os.path.join(tmp, "web-skill.zip")
+    subprocess.run(["node", "-e", """
+const fs=require('fs'), Z=require(process.argv[1]), B=require(process.argv[2]);
+const g=fs.readFileSync(process.argv[3],'utf8'), o=fs.readFileSync(process.argv[4],'utf8');
+const files=Object.keys(B.files).map(k=>({name:'my-handwriting/'+k,data:B.files[k]}));
+files.push({name:'my-handwriting/data/glyphs.json',data:g},{name:'my-handwriting/data/glyphs-oma-erika.json',data:o});
+fs.writeFileSync(process.argv[5], Z.build(files));""", os.path.join(ROOT, "js", "zip.js"), os.path.join(ROOT, "js", "skill-bundle.js"),
+                    fx, omap, zpath], check=True, capture_output=True)
+    zf = zipfile.ZipFile(zpath)
+    ok(zf.testzip() is None, "ZIP from the browser: CRCs ok")
+    _lic = lambda t: t.replace("\r\n", "\n").strip()
+    ok("my-handwriting/LICENSE" in zf.namelist() and _lic(zf.read("my-handwriting/LICENSE").decode("utf-8"))
+       == _lic(open(os.path.join(ROOT, "LICENSE"), encoding="utf-8").read()), "the skill ZIP carries the MIT license (same as LICENSE)")
+    ok(_lic(open(os.path.join(ROOT, "skill", "my-handwriting", "LICENSE"), encoding="utf-8").read())
+       == _lic(open(os.path.join(ROOT, "LICENSE"), encoding="utf-8").read()), "skill/my-handwriting/LICENSE equals LICENSE")
+    xdir = os.path.join(tmp, "unzipped")
+    zf.extractall(xdir)
+    zf.close()
+    xs = os.path.join(xdir, "my-handwriting", "scripts", "my_handwriting.py")
+    p = subprocess.run([sys.executable, xs, "info"], capture_output=True, env=dict(os.environ, MY_HANDWRITING_LANG="en"))
+    info = json.loads(p.stdout.decode("utf-8"))
+    ok(p.returncode == 0 and info["ready"] and len(info["handwritings"]) == 2, "unzipped skill is ready: %s" % info.get("handwritings"))
+    p = subprocess.run([sys.executable, xs, "render", "--text", "# Hi\n- a", "--markdown", "--out", os.path.join(tmp, "z.pdf"), "--json"],
+                       capture_output=True, env=dict(os.environ, MY_HANDWRITING_LANG="en"))
+    ok(p.returncode == 0 and os.path.getsize(os.path.join(tmp, "z.pdf")) > 500, "unzipped skill writes a PDF")
+except (OSError, subprocess.CalledProcessError) as e:
+    print("note: node not available, web ZIP test skipped (%s)" % e)
 
 print(("FAILED %d" % fails if fails else "OK") + " - %d checks (files in %s)" % (checks, tmp))
 sys.exit(1 if fails else 0)

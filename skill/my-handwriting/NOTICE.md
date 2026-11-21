@@ -1,6 +1,6 @@
 # Notices
 
-my-handwriting is released under the MIT License (see `LICENSE`).
+my-handwriting is released under the MIT License (see `LICENSE`, also in the skill folder).
 
 ## Hershey fonts
 

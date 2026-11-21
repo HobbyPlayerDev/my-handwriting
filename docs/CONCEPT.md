@@ -1,8 +1,9 @@
 # Concept: my-handwriting
 
 ## Goal
-Anyone can teach the computer their own handwriting in about an hour and then write any text in it -
-without installing anything, without an account, without the handwriting leaving their device.
+Anyone can teach Claude (and the app) their own handwriting in about an hour and then write any text in it -
+without installing anything, without an account; the handwriting only leaves their device when they
+upload the skill ZIP to their own Claude account.
 Claude can use the same handwriting through the skill `/my-handwriting` to write whole documents.
 
 ## Who, what for
@@ -28,6 +29,22 @@ Claude can use the same handwriting through the skill `/my-handwriting` to write
 5. **Claude** - `install` copies the skill and the exported file to `~/.claude/skills/my-handwriting/`;
    `/my-handwriting …` → Claude writes Markdown, renders a PDF, reports characters it had to replace.
 
+## Several handwritings
+Each handwriting (person or style) has its own samples and settings (`profiles` + `state:<id>` in
+IndexedDB). Switch with the button next to the logo; create, rename, delete in the settings (delete
+and "reset everything" can be undone until the page is closed). Exports carry the `name`; the skill
+keeps the default handwriting in `data/glyphs.json` and others in `data/glyphs-<name>.json`
+(`--profile`).
+
+## Getting it into Claude
+"Use in Claude" builds `my-handwriting-skill.zip` in the browser (`js/zip.js` + `js/skill-bundle.js`,
+the generated copy of `skill/my-handwriting/`) with the active handwriting as `data/glyphs.json`
+(optionally all). There is **one** way in the interface, because it works for everyone: upload the
+ZIP in the Claude app (claude.ai → Customize → Skills → + → Upload a skill; needs code execution,
+works on the free plan). Skills uploaded there are available in every chat (web, desktop, phone) and
+are synced to Claude Code. Developers can still install locally with `my_handwriting.py install`
+(README). A web page cannot write into Claude directly, so the upload is always one step by the user.
+
 ## Parts
 
 | Part | File | Job |
@@ -48,7 +65,8 @@ Claude can use the same handwriting through the skill `/my-handwriting` to write
   "metrics": { "scale": 1000, "cap": 1, "xheight": 0.6, "baseline": 0, "descender": -0.4,
                "boxTop": 1.45, "boxBottom": -0.6, "boxWidth": 2.2, "penWidth": 0.05 },
   "settings": { "target": 10, "custom": "π✓", "scripts": ["en", "de"], "lang": "de",
-                "claude": { "lang": "de", "paper": "lined", "size": 6, "color": "blue", "page": "a4", "fallback": "font" } },
+                "claude": { "lang": "de", "paper": "lined", "size": 6, "color": "blue", "page": "a4", "fallback": "font",
+                            "realism": true, "align": "left", "variation": 1 } },
   "glyphs": { "A": [ { "id": "…uuid…", "created": 1763390000000, "dev": "pen",
                        "strokes": [[x, y, x, y, …], …] } ] } }
 ```

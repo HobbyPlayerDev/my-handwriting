@@ -1,14 +1,37 @@
 {
   "name": "My Handwriting",
   "short_name": "Handwriting",
-  "description": "Teach the computer your handwriting and write any text with it. Offline, nothing is uploaded.",
+  "description": "Teach Claude your handwriting and write any text with it. Offline, nothing is uploaded.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f7f5ef",
-  "theme_color": "#1f2f86",
+  "background_color": "#f5f5f7",
+  "theme_color": "#f5f5f7",
   "icons": [
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
   ]
 }

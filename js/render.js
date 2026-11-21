@@ -236,10 +236,19 @@
   Box.prototype.profiles = function () {
     if (!this._prof) {
       var left = {}, right = {};
-      this.ink.concat(this.marks).forEach(function (st) { st.forEach(function (p) {
-        var b = Math.floor(p[1] / BAND);
-        if (left[b] === undefined || p[0] < left[b]) left[b] = p[0];
-        if (right[b] === undefined || p[0] > right[b]) right[b] = p[0];
+      var put = function (x, y) {
+        var b = Math.floor(y / BAND);
+        if (left[b] === undefined || x < left[b]) left[b] = x;
+        if (right[b] === undefined || x > right[b]) right[b] = x;
+      };
+      // straight lines keep only their end points (simplify): fill in the bands in between,
+      // otherwise the next letter slides into a straight stem (BB, DD, AA)
+      this.ink.concat(this.marks).forEach(function (st) { st.forEach(function (p, i) {
+        if (i) {
+          var q = st[i - 1], n = Math.ceil(Math.abs(p[1] - q[1]) / (BAND / 2));
+          for (var j = 1; j < n; j++) put(q[0] + (p[0] - q[0]) * j / n, q[1] + (p[1] - q[1]) * j / n);
+        }
+        put(p[0], p[1]);
       }); });
       this._prof = [left, right];
     }
@@ -272,6 +281,7 @@
     this.kerning = o.kerning === undefined ? 1 : o.kerning;
     this.labels = o.labels || { small: 'small', accent: '+ accent', 'case': 'case swapped', frac: 'fraction', font: 'standard' };
     this.font = o.fallbackFont === false ? null : fontSetFor(o.font);
+    this.real = !!o.realism;
     this.recent = {}; this.fallbacks = {}; this.missing = {}; this.cache = {}; this.fontChars = {};
   }
   var TS = Typesetter.prototype;
@@ -376,13 +386,31 @@
     var s = this.pick(key), bb = s.bbox, cx = (bb[0] + bb[1]) / 2, cy = (bb[2] + bb[3]) / 2;
     var a = s.adjScale, dya = s.adjDy, v = this.v, rng = this.rng;
     var sc = 1 + gauss(rng, 0.03 * v), rot = gauss(rng, 1.3 * v) * Math.PI / 180, dy = gauss(rng, 0.014 * v);
-    var cr = Math.cos(rot), sr = Math.sin(rot), rcy = 0.45;
-    return new Box(s.strokes.map(function (st) { return st.map(function (p) {
+    var cr = Math.cos(rot), sr = Math.sin(rot), rcy = 0.45, re = this.realShape();
+    return new Box(this.tremor(s.strokes.map(function (st) { return st.map(function (p) {
       var x = cx + (p[0] - cx) * a, y = cy + (p[1] - cy) * a + dya;
-      x = cx + (x - cx) * sc; y = y * sc;
+      x = cx + (x - cx) * sc * re.sx + re.sh * (y - rcy); y = y * sc;
       var xr = x - cx, yr = y - rcy;
       return [cx + xr * cr - yr * sr, rcy + xr * sr + yr * cr + dy];
-    }); }));
+    }); })));
+  };
+  /* Realism (option): every letter a little wider or narrower and a little more or less slanted ... */
+  TS.realShape = function () {
+    if (!this.real) return { sx: 1, sh: 0 };
+    return { sx: 1 + gauss(this.rng, 0.045 * this.v), sh: gauss(this.rng, 0.035 * this.v) };
+  };
+  /* ... and a gentle, smooth hand tremor along each stroke (two slow waves, not noise). */
+  TS.tremor = function (strokes) {
+    if (!this.real || !this.v) return strokes;
+    var rng = this.rng, A = 0.0055 * this.v;
+    return strokes.map(function (st) {
+      var p1 = rng.uniform(0, 6.28), p2 = rng.uniform(0, 6.28), p3 = rng.uniform(0, 6.28), s = 0;
+      return st.map(function (p, i) {
+        if (i) s += Math.hypot(p[0] - st[i - 1][0], p[1] - st[i - 1][1]);
+        return [p[0] + A * (Math.sin(p1 + s * 12.6) + 0.25 * Math.sin(p3 + s * 37)),
+                p[1] + A * (Math.sin(p2 + s * 11.3) + 0.25 * Math.sin(p1 + s * 41))];
+      });
+    });
   };
   // A character from the standard-handwriting font, fitted to this handwriting (size, x-height,
   // slant) and varied like a real sample so it does not look printed.
@@ -391,13 +419,13 @@
     var k = gs.cap;
     if (/^\p{Ll}$/u.test(ch)) k *= Math.max(0.8, Math.min(1.08, gs.xh / this.font.xh));
     var sc = 1 + gauss(rng, 0.03 * v), rot = gauss(rng, 1.2 * v) * Math.PI / 180, dy = gauss(rng, 0.012 * v);
-    var cr = Math.cos(rot), sr = Math.sin(rot), sl = gs.slant, amp = 0.007 * v, ph = rng.uniform(0, 6.28), rcy = 0.45;
-    return new Box(g.strokes.map(function (st) { return st.map(function (p) {
-      var y = p[1] * k * sc, x = p[0] * k * sc + sl * y;
+    var cr = Math.cos(rot), sr = Math.sin(rot), sl = gs.slant, amp = 0.007 * v, ph = rng.uniform(0, 6.28), rcy = 0.45, re = this.realShape();
+    return new Box(this.tremor(g.strokes.map(function (st) { return st.map(function (p) {
+      var y = p[1] * k * sc, x = p[0] * k * sc * re.sx + (sl + re.sh) * y;
       x += amp * Math.sin(ph + y * 9); y += amp * Math.sin(ph * 1.3 + x * 9);
       var yr = y - rcy;
       return [x * cr - yr * sr, rcy + x * sr + yr * cr + dy];
-    }); }));
+    }); })));
   };
   TS.missingBox = function (ch) {
     this.missing[ch] = (this.missing[ch] || 0) + 1;
@@ -504,8 +532,10 @@
   };
   TS.charsToItems = function (s) {
     var out = [], cs = chars(s), i = 0, mk = this.gs.multiKeys;
+    // only look ahead as far as the longest multi-character key (joining the whole rest made long paragraphs quadratic)
+    var maxK = 0; mk.forEach(function (key) { maxK = Math.max(maxK, chars(key).length); });
     while (i < cs.length) {
-      var hit = null, rest = cs.slice(i).join('');
+      var hit = null, rest = maxK ? cs.slice(i, i + maxK).join('') : '';
       for (var k = 0; k < mk.length; k++) if (rest.indexOf(mk[k]) === 0) { hit = mk[k]; break; }
       if (hit) { out.push(['g', hit]); i += chars(hit).length; continue; }
       var ch = cs[i++];
@@ -536,7 +566,8 @@
     void self; return tokens;
   };
   TS.spaceWidth = function (n) { return n * this.wordSpace * (1 + gauss(this.rng, 0.06 * this.v, 2)); };
-  TS.gap = function () { return Math.max(0.03, this.tracking * (1 + gauss(this.rng, 0.22 * this.v))); };
+  // never narrower than the pen (about 0.075), else neighbours touch at a high irregularity
+  TS.gap = function () { return Math.max(Math.min(0.1, this.tracking), this.tracking * (1 + gauss(this.rng, 0.22 * this.v))); };
 
   /* One source line -> block description. md = simple Markdown on/off. */
   function parseBlock(raw, md) {
@@ -596,10 +627,15 @@
 
   /** opt: {page:'a4'|'a5'|'a3'|'letter'|'auto', landscape, width, margin, size, lineHeight, lineSpacing,
    *        paper:'blank'|'lined'|'grid', align, variation, tracking, wordSpace, kerning, seed, labels,
-   *        markdown, font (standard-handwriting data), fallbackFont (false = red boxes)} */
+   *        markdown, font (standard-handwriting data), fallbackFont (false = red boxes),
+   *        realism (tremor, stretch, pen pressure, word hops)} */
   function buildPages(text, gs, opt) {
     var o = Object.assign({ page: 'a4', width: 180, size: 5, lineHeight: 2.0, paper: 'blank', align: 'left', variation: 1, seed: 1, markdown: false }, opt || {});
     if (o.margin === undefined || o.margin === null) o.margin = o.page === 'auto' ? 8 : 20;
+    // broken numbers (old or edited files) must not turn into NaN coordinates in PNG/SVG/PDF
+    var finite = function (v, d) { v = Number(v); return isFinite(v) ? v : d; };
+    o.size = finite(o.size, 5) > 0 ? finite(o.size, 5) : 5; o.variation = Math.max(0, finite(o.variation, 1));
+    o.margin = Math.max(0, finite(o.margin, 20)); o.width = finite(o.width, 180) > 0 ? finite(o.width, 180) : 180;
     var rng = makeRng(o.seed), ts = new Typesetter(gs, rng, o), size = o.size, pw, ph;
     text = String(text || '').replace(/\r\n?/g, '\n'); if (text.normalize) text = text.normalize('NFC');
     if (o.page === 'auto') { pw = o.width; ph = null; }
@@ -617,37 +653,56 @@
       if (cur.length >= perPage) chunks.push(cur = []);
       cur.push(l);
     });
-    if (ph === null) {
-      var most = 1; chunks.forEach(function (c) { most = Math.max(most, c.length); });
-      ph = first + (most - 1) * lineH + size * 0.7 + mb;
-    }
-    var pages = [];
+    // "fit to text": every page as high as its own lines (a short last page after [[pagebreak]] stays short)
+    var fit = ph === null;
+    var heightOf = function (chunk) { return fit ? first + (Math.max(1, chunk.length) - 1) * lineH + size * 0.7 + mb : ph; };
+    var pages = [], real = !!o.realism;
+    // realism: pen pressure - each stroke a little thicker or thinner, starting and ending lighter
+    // (pg.inkW holds a width factor per stroke)
+    var addInk = function (pg, st) {
+      if (!real) { pg.ink.push(st); return; }
+      var f = Math.max(0.75, Math.min(1.25, 1 + gauss(rng, 0.09 * o.variation))), n = st.length;
+      var put = function (a, b, k) { pg.ink.push(st.slice(a, b)); pg.inkW.push(Math.round(f * k * 20) / 20); };
+      if (n < 12) { put(0, n, 1); return; }
+      var k = Math.max(1, Math.round(n * 0.07));
+      put(0, k + 1, 0.7); put(k, 2 * k + 1, 0.86); put(2 * k, n - 2 * k, 1);
+      put(n - 2 * k - 1, n - k, 0.88); put(n - k - 1, n, 0.76);
+    };
     chunks.forEach(function (chunk) {
-      var pg = { w: pw, h: ph, ink: [], marks: [], rules: [] };
+      var h = heightOf(chunk), pg = { w: pw, h: h, ink: [], marks: [], rules: [] };
+      if (real) pg.inkW = [];
       pages.push(pg);
-      if (o.paper === 'lined') { for (var y = first; y < ph - 4; y += lineH) pg.rules.push([ml - 2, y, pw - mr + 2, y]); }
+      if (o.paper === 'lined') { for (var y = first; y < h - 4; y += lineH) pg.rules.push([ml - 2, y, pw - mr + 2, y]); }
       else if (o.paper === 'grid') {
-        for (var gx = 0; gx <= pw + 1e-6; gx += grid) pg.rules.push([gx, 0, gx, ph]);
-        for (var gy = 0; gy <= ph + 1e-6; gy += grid) pg.rules.push([0, gy, pw, gy]);
+        for (var gx = 0; gx <= pw + 1e-6; gx += grid) pg.rules.push([gx, 0, gx, h]);
+        for (var gy = 0; gy <= h + 1e-6; gy += grid) pg.rules.push([0, gy, pw, gy]);
       }
       chunk.forEach(function (line, li) {
         if (!line.items.length && !line.rule) return;
         var base = first + li * lineH, v = o.variation;
         var slope = Math.tan(gauss(rng, 0.3 * v) * Math.PI / 180), amp = 0.02 * v, period = rng.uniform(7, 13), phase = rng.uniform(0, 2 * Math.PI);
         var xStart = gauss(rng, 0.04 * v), lineW = 0;
+        // realism: the size breathes slowly along the line, and each word sits a little higher or lower
+        var sAmp = 0, sPer = 1, sPh = 0, hop = 0, prevEnd = -Infinity;
+        if (real) { sAmp = 0.022 * v; sPer = rng.uniform(8, 15); sPh = rng.uniform(0, 2 * Math.PI); }
+        var hops = line.items.map(function (e) {
+          if (real && e[1] - prevEnd > 0.3) hop = gauss(rng, 0.012 * v);
+          prevEnd = e[1] + e[0].w; return hop;
+        });
         var items = line.items.slice();
         if (line.rule) items.push([new Box([ts.barStroke(maxW * 0.98, 0.3)], []), 0]);
         items.forEach(function (e) { lineW = Math.max(lineW, e[1] + e[0].w); });
         if (line.underline && lineW > 0) items.push([new Box([ts.barStroke(lineW, -0.16)], []), 0]);
         var shift = line.rule ? 0 : o.align === 'center' ? (maxW - lineW) / 2 : o.align === 'right' ? maxW - lineW : 0;
         var ox = ml + (shift + xStart) * size;
-        var tf = function (st, x) { return st.map(function (p) {
-          var u = x + p[0], yy = p[1] + u * slope + amp * Math.sin(phase + u * 2 * Math.PI / period);
+        var tf = function (st, x, h) { return st.map(function (p) {
+          var u = x + p[0], yy = p[1] * (1 + sAmp * Math.sin(sPh + u * 2 * Math.PI / sPer)) + h + u * slope + amp * Math.sin(phase + u * 2 * Math.PI / period);
           return [ox + u * size, base - yy * size];
         }); };
-        items.forEach(function (e) {
-          e[0].ink.forEach(function (st) { pg.ink.push(tf(st, e[1])); });
-          e[0].marks.forEach(function (st) { pg.marks.push(tf(st, e[1])); });
+        items.forEach(function (e, i) {
+          var h = hops[i] || 0;
+          e[0].ink.forEach(function (st) { addInk(pg, tf(st, e[1], h)); });
+          e[0].marks.forEach(function (st) { pg.marks.push(tf(st, e[1], h)); });
         });
       });
     });
@@ -658,6 +713,13 @@
   /* ---------------- output ---------------- */
   function color(c) { return INK[c] || (/^#[0-9a-f]{6}$/i.test(c || '') ? c : INK.blue); }
   function penWidth(o) { return o.pen || Math.max(0.25, (o.size || 5) * 0.075); }
+  /* Ink strokes grouped by width factor (pen pressure, realism option): [[factor, strokes], ...]. */
+  function inkGroups(pg) {
+    if (!pg.inkW) return [[1, pg.ink]];
+    var g = {};
+    pg.ink.forEach(function (st, i) { var f = pg.inkW[i] || 1; (g[f] || (g[f] = [])).push(st); });
+    return Object.keys(g).map(Number).sort().map(function (f) { return [f, g[f]]; });
+  }
 
   /** Draws a page on a 2D context; k = pixels per millimetre. */
   function drawPage(ctx, pg, k, o) {
@@ -679,7 +741,8 @@
       });
       ctx.stroke();
     };
-    ctx.strokeStyle = color(o.color); ctx.lineWidth = Math.max(0.8, penWidth(o) * k); poly(pg.ink);
+    ctx.strokeStyle = color(o.color);
+    inkGroups(pg).forEach(function (gr) { ctx.lineWidth = Math.max(0.8 * gr[0], penWidth(o) * gr[0] * k); poly(gr[1]); });
     if (pg.marks.length && !o.hideMissing) { ctx.strokeStyle = '#d92626'; ctx.lineWidth = Math.max(0.8, 0.3 * k); poly(pg.marks); }
     ctx.restore();
   }
@@ -699,7 +762,9 @@
     if (!o.transparent) el.push('<rect width="100%" height="100%" fill="#ffffff"/>');
     if (pg.rules.length) el.push('<path d="' + pg.rules.map(function (r) { return 'M' + f2(r[0]) + ' ' + f2(r[1]) + 'L' + f2(r[2]) + ' ' + f2(r[3]); }).join(' ') +
       '" stroke="' + (o.paper === 'grid' ? '#d6dded' : '#bcc6e0') + '" stroke-width="0.22" fill="none"/>');
-    if (pg.ink.length) el.push('<path d="' + pathData(pg.ink) + '" fill="none" stroke="' + color(o.color) + '" stroke-width="' + f2(penWidth(o)) + '" stroke-linecap="round" stroke-linejoin="round"/>');
+    if (pg.ink.length) inkGroups(pg).forEach(function (gr) {
+      el.push('<path d="' + pathData(gr[1]) + '" fill="none" stroke="' + color(o.color) + '" stroke-width="' + f2(penWidth(o) * gr[0]) + '" stroke-linecap="round" stroke-linejoin="round"/>');
+    });
     if (pg.marks.length && !o.hideMissing) el.push('<path d="' + pathData(pg.marks) + '" fill="none" stroke="#d92626" stroke-width="0.3"/>');
     el.push('</svg>');
     return el.join('\n') + '\n';
@@ -764,7 +829,9 @@
         pg.rules.forEach(function (r) { parts.push(f2(r[0] * PT) + ' ' + f2((pg.h - r[1]) * PT) + ' m ' + f2(r[2] * PT) + ' ' + f2((pg.h - r[3]) * PT) + ' l'); });
         parts.push('S Q');
       }
-      if (pg.ink.length) { parts.push('q ' + rgb + ' RG ' + f2(penWidth(o) * PT) + ' w 1 J 1 j'); parts.push(pathData(pg.ink, pg.h, PT)); parts.push('S Q'); }
+      if (pg.ink.length) inkGroups(pg).forEach(function (gr) {
+        parts.push('q ' + rgb + ' RG ' + f2(penWidth(o) * gr[0] * PT) + ' w 1 J 1 j'); parts.push(pathData(gr[1], pg.h, PT)); parts.push('S Q');
+      });
       if (pg.marks.length && !o.hideMissing) { parts.push('q 0.85 0.15 0.15 RG ' + f2(0.3 * PT) + ' w 1 J 1 j'); parts.push(pathData(pg.marks, pg.h, PT)); parts.push('S Q'); }
       var content = parts.join('\n'), pid = id++, cid = id++;
       kids.push(pid);

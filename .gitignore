@@ -5,11 +5,13 @@ my-handwriting-glyphs-*.json
 handschrift-glyphs-*.json
 *.glyphs.json
 my-handwriting-skill.zip
+*.zip
 
 # Output files
 *.pdf
 *.png
 !icons/*.png
+!docs/*.png
 *.svg
 !icon.svg
 !icons/*.svg

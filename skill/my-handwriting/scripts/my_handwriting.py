@@ -43,7 +43,7 @@ import sys
 import unicodedata
 import zlib
 
-VERSION = "1.0.0"
+VERSION = "1.5.1"
 FORMAT = "my-handwriting-glyphs"
 LEGACY_FORMATS = ("handschrift-glyphs",)       # name of the format before the project was renamed
 SUPPORTED_FORMAT_VERSIONS = (1,)
@@ -356,6 +356,7 @@ class GlyphSet:
             raise HandwritingError(L("Ungültiger Maßstab in der Datei (metrics.scale).", "Invalid scale in the file (metrics.scale)."))
         self.metrics = metrics
         self.meta = {"exported": data.get("exported"), "app": data.get("app"), "version": ver,
+                     "name": data.get("name") if isinstance(data.get("name"), str) else None,
                      "settings": data.get("settings") if isinstance(data.get("settings"), dict) else {}}
         dropped = 0
         for raw_key, arr in data["glyphs"].items():
@@ -529,11 +530,21 @@ class Box:
     def profiles(self):
         if self._prof is None:
             left, right = {}, {}
+
+            def put(x, y):
+                b = int(math.floor(y / BAND))
+                if x < left.get(b, math.inf): left[b] = x
+                if x > right.get(b, -math.inf): right[b] = x
+            # straight lines keep only their end points (simplify): fill in the bands in between,
+            # otherwise the next letter slides into a straight stem (BB, DD, AA)
             for st in self.ink + self.marks:
-                for x, y in st:
-                    b = int(math.floor(y / BAND))
-                    if x < left.get(b, math.inf): left[b] = x
-                    if x > right.get(b, -math.inf): right[b] = x
+                for i, (x, y) in enumerate(st):
+                    if i:
+                        qx, qy = st[i - 1]
+                        n = int(math.ceil(abs(y - qy) / (BAND / 2)))
+                        for j in range(1, n):
+                            put(qx + (x - qx) * j / n, qy + (y - qy) * j / n)
+                    put(x, y)
             self._prof = (left, right)
         return self._prof
 
@@ -575,9 +586,10 @@ def gauss(rng, sigma, clip=2.5):
 #  Typesetter
 # --------------------------------------------------------------------------- #
 class Typesetter:
-    def __init__(self, gs, rng, variation=1.0, tracking=0.15, word_space=0.55, kerning=1.0, font=None):
+    def __init__(self, gs, rng, variation=1.0, tracking=0.15, word_space=0.55, kerning=1.0, font=None, realism=False):
         self.gs = gs
         self.font = font
+        self.real = bool(realism)
         self.font_chars = {}
         self.rng = rng
         self.var = max(0.0, variation)
@@ -698,20 +710,43 @@ class Typesetter:
         dy = gauss(self.rng, 0.014 * v)
         cr, sr = math.cos(rot), math.sin(rot)
         rcy = 0.45
+        rsx, rsh = self.real_shape()
         out = []
         for st in s.strokes:
             nst = []
             for x, y in st:
                 x = cx + (x - cx) * a
                 y = cy + (y - cy) * a + dya
-                x = cx + (x - cx) * sc
+                x = cx + (x - cx) * sc * rsx + rsh * (y - rcy)
                 y = y * sc
                 xr, yr = x - cx, y - rcy
                 x = cx + xr * cr - yr * sr
                 y = rcy + xr * sr + yr * cr + dy
                 nst.append((x, y))
             out.append(nst)
-        return Box(out)
+        return Box(self.tremor(out))
+
+    # Realism (option): every letter a little wider or narrower and a little more or less slanted ...
+    def real_shape(self):
+        if not self.real:
+            return 1.0, 0.0
+        return 1.0 + gauss(self.rng, 0.045 * self.var), gauss(self.rng, 0.035 * self.var)
+
+    # ... and a gentle, smooth hand tremor along each stroke (two slow waves, not noise).
+    def tremor(self, strokes):
+        if not self.real or not self.var:
+            return strokes
+        rng, A, out = self.rng, 0.0055 * self.var, []
+        for st in strokes:
+            p1, p2, p3, s = rng.uniform(0, 6.28), rng.uniform(0, 6.28), rng.uniform(0, 6.28), 0.0
+            nst = []
+            for i, (x, y) in enumerate(st):
+                if i:
+                    s += math.hypot(x - st[i - 1][0], y - st[i - 1][1])
+                nst.append((x + A * (math.sin(p1 + s * 12.6) + 0.25 * math.sin(p3 + s * 37)),
+                            y + A * (math.sin(p2 + s * 11.3) + 0.25 * math.sin(p1 + s * 41))))
+            out.append(nst)
+        return out
 
     def font_box(self, ch):
         """A character from the standard-handwriting font, fitted to this handwriting (size,
@@ -725,18 +760,19 @@ class Typesetter:
         dy = gauss(rng, 0.012 * v)
         cr, sr = math.cos(rot), math.sin(rot)
         sl, amp, ph, rcy = gs.slant, 0.007 * v, rng.uniform(0, 6.28), 0.45
+        rsx, rsh = self.real_shape()
         out = []
         for st in self.font.glyphs[ch]:
             nst = []
             for px, py in st:
                 y = py * k * sc
-                x = px * k * sc + sl * y
+                x = px * k * sc * rsx + (sl + rsh) * y
                 x += amp * math.sin(ph + y * 9)
                 y += amp * math.sin(ph * 1.3 + x * 9)
                 yr = y - rcy
                 nst.append((x * cr - yr * sr, rcy + x * sr + yr * cr + dy))
             out.append(nst)
-        return Box(out)
+        return Box(self.tremor(out))
 
     def missing_box(self, ch):
         self.missing[ch] = self.missing.get(ch, 0) + 1
@@ -935,7 +971,8 @@ class Typesetter:
         return n * self.word_space * (1.0 + gauss(self.rng, 0.06 * self.var, 2.0))
 
     def gap(self):
-        return max(0.03, self.tracking * (1.0 + gauss(self.rng, 0.22 * self.var)))
+        # never narrower than the pen (about 0.075), else neighbours touch at a high irregularity
+        return max(min(0.1, self.tracking), self.tracking * (1.0 + gauss(self.rng, 0.22 * self.var)))
 
 
 def _has_missing(p):
@@ -1064,6 +1101,7 @@ class Page:
     def __init__(self, w, h):
         self.w, self.h = w, h
         self.ink = []       # strokes in mm, y down
+        self.ink_w = None   # width factor per ink stroke (pen pressure, realism option)
         self.marks = []     # red marks (missing characters)
         self.rules = []     # paper lines: (x0, y0, x1, y1, kind)
 
@@ -1084,7 +1122,8 @@ def parse_color(c):
 def build_pages(text, gs, opt):
     rng = random.Random(opt.seed)
     font = load_font() if getattr(opt, "font", True) else None
-    ts = Typesetter(gs, rng, opt.variation, opt.tracking, opt.word_space, opt.kerning, font)
+    real = bool(getattr(opt, "realism", False))
+    ts = Typesetter(gs, rng, opt.variation, opt.tracking, opt.word_space, opt.kerning, font, real)
     size = opt.size
     if opt.page == "auto":
         pw, ph = opt.width, None
@@ -1119,13 +1158,38 @@ def build_pages(text, gs, opt):
         if len(chunks[-1]) >= per_page:
             chunks.append([])
         chunks[-1].append(ln)
-    if ph is None:
-        most = max(1, max(len(c) for c in chunks))
-        ph = first + (most - 1) * line_h + size * 0.7 + mb
+    # "fit to text": every page as high as its own lines (a short last page after [[pagebreak]] stays short)
+    fit = ph is None
+
+    def height_of(chunk):
+        return first + (max(1, len(chunk)) - 1) * line_h + size * 0.7 + mb if fit else ph
+
+    # realism: pen pressure - each stroke a little thicker or thinner, starting and ending lighter
+    def add_ink(pg, st):
+        if not real:
+            pg.ink.append(st)
+            return
+        f = max(0.75, min(1.25, 1.0 + gauss(rng, 0.09 * opt.variation)))
+        n = len(st)
+
+        def put(a, b, k):
+            pg.ink.append(st[a:b])
+            pg.ink_w.append(round(f * k * 20) / 20.0)
+        if n < 12:
+            put(0, n, 1.0)
+            return
+        k = max(1, int(round(n * 0.07)))
+        put(0, k + 1, 0.7)
+        put(k, 2 * k + 1, 0.86)
+        put(2 * k, n - 2 * k, 1.0)
+        put(n - 2 * k - 1, n - k, 0.88)
+        put(n - k - 1, n, 0.76)
 
     pages = []
     for chunk in chunks:
-        pg = Page(pw, ph)
+        pg = Page(pw, height_of(chunk))
+        if real:
+            pg.ink_w = []
         pages.append(pg)
         add_paper(pg, opt, first, line_h, ml, mr, grid)
         for li, line in enumerate(chunk):
@@ -1138,6 +1202,16 @@ def build_pages(text, gs, opt):
             period = rng.uniform(7.0, 13.0)
             phase = rng.uniform(0, 2 * math.pi)
             x_start = gauss(rng, 0.04 * v)
+            # realism: the size breathes slowly along the line, and each word sits a little higher or lower
+            s_amp, s_per, s_ph = 0.0, 1.0, 0.0
+            if real:
+                s_amp, s_per, s_ph = 0.022 * v, rng.uniform(8.0, 15.0), rng.uniform(0, 2 * math.pi)
+            hops, hop, prev_end = [], 0.0, -math.inf
+            for b, x in line.items:
+                if real and x - prev_end > 0.3:
+                    hop = gauss(rng, 0.012 * v)
+                prev_end = x + b.w
+                hops.append(hop)
             items = list(line.items)
             if line.rule:
                 items.append((Box([ts.bar_stroke(max_w * 0.98, 0.3)]), 0.0))
@@ -1151,16 +1225,19 @@ def build_pages(text, gs, opt):
                 shift = max_w - line_w
             ox = ml + (shift + x_start) * size
 
-            def tf(st, x):
+            def tf(st, x, h):
                 out = []
                 for px, py in st:
                     u = x + px
-                    yy = py + u * slope + amp * math.sin(phase + u * 2 * math.pi / period)
+                    yy = (py * (1 + s_amp * math.sin(s_ph + u * 2 * math.pi / s_per)) + h + u * slope
+                          + amp * math.sin(phase + u * 2 * math.pi / period))
                     out.append((ox + u * size, base - yy * size))
                 return out
-            for b, x in items:
-                pg.ink += [tf(st, x) for st in b.ink]
-                pg.marks += [tf(st, x) for st in b.marks]
+            for i, (b, x) in enumerate(items):
+                h = hops[i] if i < len(hops) else 0.0
+                for st in b.ink:
+                    add_ink(pg, tf(st, x, h))
+                pg.marks += [tf(st, x, h) for st in b.marks]
     return pages, ts, sum(1 for ln in lines if not ln.pagebreak)
 
 
@@ -1272,6 +1349,16 @@ def _atomic_write(path, data):
     os.replace(tmp, path)
 
 
+def ink_groups(pg):
+    """Ink strokes grouped by width factor (pen pressure, realism option): [(factor, strokes)]."""
+    if not pg.ink_w:
+        return [(1.0, pg.ink)]
+    g = {}
+    for st, f in zip(pg.ink, pg.ink_w):
+        g.setdefault(f, []).append(st)
+    return sorted(g.items())
+
+
 def write_pdf(path, pages, color, pen, transparent=False):
     pw = PdfWriter()
     r, g, b = _rgb(color)
@@ -1285,9 +1372,9 @@ def write_pdf(path, pages, color, pen, transparent=False):
                 parts += ["%s %s m %s %s l" % (_f(x0 * PT), _f((pg.h - y0) * PT), _f(x1 * PT), _f((pg.h - y1) * PT))
                           for x0, y0, x1, y1, _k in group]
                 parts.append("S Q")
-        if pg.ink:
-            parts.append("q %.3f %.3f %.3f RG %s w 1 J 1 j" % (r, g, b, _f(pen * PT)))
-            parts.append(pdf_path(pg.ink, pg.h))
+        for f, strokes in (ink_groups(pg) if pg.ink else []):
+            parts.append("q %.3f %.3f %.3f RG %s w 1 J 1 j" % (r, g, b, _f(pen * f * PT)))
+            parts.append(pdf_path(strokes, pg.h))
             parts.append("S Q")
         if pg.marks:
             parts.append("q 0.85 0.15 0.15 RG %s w 1 J 1 j" % _f(0.3 * PT))
@@ -1332,9 +1419,9 @@ def write_svg(path, pages, color, pen, transparent=False):
             if segs:
                 d = " ".join("M%s %sL%s %s" % (_f(a), _f(b), _f(c), _f(e)) for a, b, c, e, _k in segs)
                 el.append('<path d="%s" stroke="%s" stroke-width="%s" fill="none"/>' % (d, col, wd))
-        if pg.ink:
+        for f, strokes in (ink_groups(pg) if pg.ink else []):
             el.append('<path d="%s" fill="none" stroke="%s" stroke-width="%s" stroke-linecap="round" stroke-linejoin="round"/>'
-                      % (svg_path(pg.ink), color, _f(pen)))
+                      % (svg_path(strokes), color, _f(pen * f)))
         if pg.marks:
             el.append('<path d="%s" fill="none" stroke="#d92626" stroke-width="0.3"/>' % svg_path(pg.marks))
         el.append("</svg>")
@@ -1359,12 +1446,12 @@ def write_png(path, pages, color, pen, transparent=False, dpi=200):
         k = dpi / 25.4 * ss
         SW, SH = W * ss, H * ss
 
-        def draw_layer(strokes, width_mm):
+        def draw_layer(strokes, width_mm, widths=None):
             mask = Image.new("L", (SW, SH), 0)
             d = ImageDraw.Draw(mask)
-            wpx = max(1, int(round(width_mm * k)))
-            r = wpx / 2.0
-            for st in strokes:
+            for i, st in enumerate(strokes):
+                wpx = max(1, int(round(width_mm * (widths[i] if widths else 1.0) * k)))
+                r = wpx / 2.0
                 pts = [(x * k, y * k) for x, y in st]
                 if len(pts) == 1:
                     x, y = pts[0]
@@ -1385,7 +1472,7 @@ def write_png(path, pages, color, pen, transparent=False, dpi=200):
                 m = draw_layer(segs, wd)
                 img.paste(Image.new("RGBA", (W, H), col + (255,)), (0, 0), m)
         if pg.ink:
-            m = draw_layer(pg.ink, pen)
+            m = draw_layer(pg.ink, pen, pg.ink_w)
             img.paste(Image.new("RGBA", (W, H), rgb + (255,)), (0, 0), m)
         if pg.marks:
             m = draw_layer(pg.marks, 0.3)
@@ -1400,7 +1487,52 @@ def write_png(path, pages, color, pen, transparent=False, dpi=200):
 # --------------------------------------------------------------------------- #
 #  Commands
 # --------------------------------------------------------------------------- #
-CLAUDE_DEFAULTS = {"lang": None, "paper": "lined", "size": 6.0, "color": "blue", "page": "a4", "fallback": "font"}
+CLAUDE_DEFAULTS = {"lang": None, "paper": "lined", "size": 6.0, "color": "blue", "page": "a4", "fallback": "font", "realism": True,
+                   "align": "left", "variation": 1.0}
+
+# Labels of the settings line Claude shows before its answer - the exact words of the app
+# (js/lang/<code>.js; tests/py_test.py checks that they stay identical). "on"/"off" are only here.
+SETTING_LABELS = {
+    "de": ["Einstellungen", "Größe", "Papier", "Format", "Farbe", "Ausrichtung", "Unregelmäßigkeit", "Echt wirken lassen (empfohlen)", "Fehlende Zeichen ergänzen (Standard-Handschrift)", "Transparenter Hintergrund", "Blanko", "Liniert", "Kariert", "A4", "A5", "US-Letter", "Passend zum Text", "Blau", "Schwarz", "Königsblau", "Rot", "Grün", "Bleistift", "Links", "Mitte", "Rechts", "an", "aus"],
+    "en": ["Settings", "Size", "Paper", "Format", "Colour", "Alignment", "Irregularity", "Make it look real (recommended)", "Fill in missing characters (standard handwriting)", "Transparent background", "Blank", "Lined", "Squared", "A4", "A5", "US Letter", "Fit to text", "Blue", "Black", "Royal blue", "Red", "Green", "Pencil", "Left", "Centre", "Right", "on", "off"],
+    "es": ["Ajustes", "Tamaño", "Papel", "Formato", "Color", "Alineación", "Irregularidad", "Aspecto real (recomendado)", "Completar caracteres que faltan (letra estándar)", "Fondo transparente", "Liso", "Rayado", "Cuadriculado", "A4", "A5", "Carta (EE. UU.)", "Ajustado al texto", "Azul", "Negro", "Azul real", "Rojo", "Verde", "Lápiz", "Izquierda", "Centro", "Derecha", "activado", "desactivado"],
+    "fr": ["Réglages", "Taille", "Papier", "Format", "Couleur", "Alignement", "Irrégularité", "Rendu réaliste (recommandé)", "Compléter les caractères manquants (écriture standard)", "Fond transparent", "Uni", "Ligné", "Quadrillé", "A4", "A5", "Lettre US", "Ajusté au texte", "Bleu", "Noir", "Bleu roi", "Rouge", "Vert", "Crayon", "Gauche", "Centre", "Droite", "activé", "désactivé"],
+    "it": ["Impostazioni", "Dimensione", "Carta", "Formato", "Colore", "Allineamento", "Irregolarità", "Aspetto reale (consigliato)", "Completa i caratteri mancanti (grafia standard)", "Sfondo trasparente", "Bianca", "A righe", "A quadretti", "A4", "A5", "Lettera USA", "Adattato al testo", "Blu", "Nero", "Blu reale", "Rosso", "Verde", "Matita", "Sinistra", "Centro", "Destra", "attivo", "disattivo"],
+    "pl": ["Ustawienia", "Rozmiar", "Papier", "Format", "Kolor", "Wyrównanie", "Nieregularność", "Naturalny wygląd (zalecane)", "Uzupełniaj brakujące znaki (pismo standardowe)", "Przezroczyste tło", "Gładki", "W linie", "W kratkę", "A4", "A5", "US Letter", "Dopasowany do tekstu", "Niebieski", "Czarny", "Królewski niebieski", "Czerwony", "Zielony", "Ołówek", "Do lewej", "Do środka", "Do prawej", "włączone", "wyłączone"],
+}
+SETTING_KEYS = ["set.title", "write.size", "write.paper", "write.page", "write.color", "write.align", "write.variation",
+                "set.realismOn", "write.fallbackOn", "write.transparent", "paper.blank", "paper.lined", "paper.grid",
+                "page.a4", "page.a5", "page.letter", "page.auto", "color.blue", "color.black", "color.royal", "color.red",
+                "color.green", "color.pencil", "align.left", "align.center", "align.right", "on", "off"]
+
+
+def irregularity(variation):
+    """The app's slider 'Irregularity' in percent: 0 % = very even, 50 % = default (1.0), 100 % = 2.0."""
+    return int(round(float(variation) * 50))
+
+
+def settings_line(opt, lang):
+    """One line with every setting of this document, in the words of the app (Claude shows it first)."""
+    lab = dict(zip(SETTING_KEYS, SETTING_LABELS.get(lang) or SETTING_LABELS["en"]))
+    short = lambda k: lab[k].split(" (")[0]
+    yes = lambda b: lab["on"] if b else lab["off"]
+    size = ("%g" % opt.size) if lang in (None, "en") else ("%g" % opt.size).replace(".", ",")
+    page = lab.get("page." + opt.page, opt.page.upper())
+    if getattr(opt, "landscape", False) and opt.page != "auto":
+        page += " ↔"
+    parts = [
+        "%s: %s mm" % (lab["write.size"], size),
+        "%s: %s" % (lab["write.paper"], lab.get("paper." + opt.paper, opt.paper)),
+        "%s: %s" % (lab["write.page"], page),
+        "%s: %s" % (lab["write.color"], lab.get("color." + str(opt.color).lower(), opt.color)),
+        "%s: %s" % (lab["write.align"], lab.get("align." + opt.align, opt.align)),
+        "%s: %d %%" % (lab["write.variation"], irregularity(opt.variation)),
+        "%s: %s" % (short("set.realismOn"), yes(opt.realism)),
+        "%s: %s" % (short("write.fallbackOn"), yes(opt.font)),
+    ]
+    if opt.transparent:
+        parts.append("%s: %s" % (lab["write.transparent"], yes(True)))
+    return lab["set.title"] + ": " + " · ".join(parts)
 EXPORT_PATTERNS = ("my-handwriting-glyphs*.json", "handschrift-glyphs*.json")
 
 
@@ -1446,7 +1578,48 @@ def no_glyphs_message():
              "  (or pass --glyphs <file> or set MY_HANDWRITING_GLYPHS)")
 
 
+def slug(name):
+    """File-name part from a handwriting name (same as slug() in js/app.js)."""
+    t = unicodedata.normalize("NFKD", str(name or ""))
+    t = "".join(c for c in t if not unicodedata.combining(c)).lower()
+    return re.sub(r"[^a-z0-9]+", "-", t).strip("-")[:30]
+
+
+def handwritings():
+    """Handwritings stored in the skill: data/glyphs.json (default) and data/glyphs-<name>.json.
+    -> list of {"name", "file", "default"}"""
+    d = os.path.join(SKILL_DIR, "data")
+    out = []
+    if not os.path.isdir(d):
+        return out
+    for fn in sorted(os.listdir(d)):
+        if not (fn == "glyphs.json" or (fn.startswith("glyphs-") and fn.endswith(".json"))):
+            continue
+        path = os.path.join(d, fn)
+        name = None
+        try:
+            with open(path, "r", encoding="utf-8-sig") as fh:
+                data = json.load(fh)
+            if isinstance(data, dict) and isinstance(data.get("name"), str) and data["name"].strip():
+                name = data["name"].strip()
+        except (OSError, ValueError):
+            pass
+        if not name:
+            name = "default" if fn == "glyphs.json" else fn[7:-5]
+        out.append({"name": name, "file": path, "default": fn == "glyphs.json"})
+    out.sort(key=lambda h: (not h["default"], h["name"].lower()))
+    return out
+
+
 def resolve_glyphs(opt):
+    want = getattr(opt, "profile", None)
+    if not getattr(opt, "glyphs", None) and want:
+        hs = handwritings()
+        hit = [h for h in hs if h["name"].lower() == want.lower() or slug(h["name"]) == slug(want)]
+        if not hit:
+            raise HandwritingError(L("Handschrift „%s“ nicht gefunden. Vorhanden: %s", "Handwriting \"%s\" not found. Available: %s")
+                                   % (want, ", ".join(h["name"] for h in hs) or "-"))
+        opt.glyphs = hit[0]["file"]
     if not getattr(opt, "glyphs", None):
         opt.glyphs = find_glyphs()
     if not opt.glyphs:
@@ -1471,6 +1644,12 @@ def claude_settings(gs):
             out["page"] = cs["page"]
         if cs.get("fallback") in ("font", "box"):
             out["fallback"] = cs["fallback"]
+        if isinstance(cs.get("realism"), bool):
+            out["realism"] = cs["realism"]
+        if cs.get("align") in ("left", "center", "right"):
+            out["align"] = cs["align"]
+        if isinstance(cs.get("variation"), (int, float)) and not isinstance(cs.get("variation"), bool) and 0 <= cs["variation"] <= 3:
+            out["variation"] = float(cs["variation"])
     if out["lang"] is None:
         ui = gs.meta.get("settings", {}).get("lang")
         out["lang"] = ui if ui in LANG_ORDER else None
@@ -1523,6 +1702,14 @@ def cmd_render(opt):
         opt.page = (cs["page"] if cs["page"] != "auto" else "a4") if fmt == "pdf" else "auto"
     if opt.font is None:
         opt.font = cs["fallback"] == "font"
+    if opt.realism is None:
+        opt.realism = cs["realism"]
+    if opt.align is None:
+        opt.align = cs["align"]
+    if opt.irregularity is not None:
+        opt.variation = opt.irregularity / 50.0
+    elif opt.variation is None:
+        opt.variation = cs["variation"]
     if opt.line_spacing is None and opt.paper == "lined" and opt.line_height is None:
         opt.line_spacing = max(6.0, opt.size * 1.9)
     if opt.line_height is None:
@@ -1553,12 +1740,16 @@ def cmd_render(opt):
         "ok": True, "files": [os.path.abspath(f) for f in files], "pages": len(pages), "lines": n_lines, "seed": opt.seed,
         "characters": len(text), "missing": sorted(ts.missing), "standard_handwriting": sorted(ts.font_chars),
         "fallbacks": ts.used_fallbacks, "glyphs": os.path.abspath(opt.glyphs),
-        "settings": {"paper": opt.paper, "size": opt.size, "color": opt.color, "page": opt.page,
-                     "markdown": bool(opt.markdown), "font": bool(opt.font)},
+        "settings": {"paper": opt.paper, "size": opt.size, "color": opt.color, "page": opt.page, "align": opt.align,
+                     "irregularity": irregularity(opt.variation), "variation": opt.variation, "landscape": bool(opt.landscape),
+                     "transparent": bool(opt.transparent), "markdown": bool(opt.markdown), "font": bool(opt.font),
+                     "realism": bool(opt.realism)},
+        "settings_line": settings_line(opt, cs["lang"]),
     }
     if opt.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
+        print(report["settings_line"])
         print(L("✓ Geschrieben: %s  (%d Seite(n), %d Zeilen, Seed %d)", "✓ Written: %s  (%d page(s), %d lines, seed %d)")
               % (", ".join(files), len(pages), n_lines, opt.seed))
         if ts.font_chars:
@@ -1575,7 +1766,12 @@ def cmd_render(opt):
 
 def cmd_info(opt):
     """Everything Claude should know before writing, as JSON."""
-    path = getattr(opt, "glyphs", None) or find_glyphs()
+    try:
+        path = resolve_glyphs(opt)
+    except HandwritingError:
+        if getattr(opt, "profile", None):
+            raise
+        path = None
     info = {"skill_version": VERSION, "skill_dir": SKILL_DIR, "glyphs": None, "ready": False,
             "searched": [p for _w, p in glyph_candidates()] + [os.path.join("~", "Downloads", EXPORT_PATTERNS[0])]}
     if not path:
@@ -1594,7 +1790,8 @@ def cmd_info(opt):
     base_missing = [c for g in cov["groups"] if not g["id"].startswith("lang-") for c in g["missing"]]
     info.update({
         "glyphs": os.path.abspath(path), "ready": True, "exported": gs.meta.get("exported"),
-        "samples": gs.total(), "characters": len(gs.samples), "languages": scripts, "claude": cs,
+        "name": gs.meta.get("name"), "handwritings": [{"name": h["name"], "default": h["default"]} for h in handwritings()],
+        "samples": gs.total(), "characters": len(gs.samples), "languages": scripts, "claude": dict(cs, irregularity=irregularity(cs["variation"])),
         "verdict": cov["verdict_code"], "missing_basic": "".join(base_missing), "languages_missing": per_lang,
         "own_characters": cov["extra"], "standard_handwriting_available": bool(font),
         "note": "Characters without samples are written in the standard handwriting (unless claude.fallback is 'box').",
@@ -1631,7 +1828,7 @@ def cmd_install(opt):
     dest = _copy_skill(dest)
     data_dir = os.path.join(dest, "data")
     os.makedirs(data_dir, exist_ok=True)
-    target = os.path.join(data_dir, "glyphs.json")
+    target = os.path.join(data_dir, ("glyphs-%s.json" % slug(opt.name)) if opt.name and slug(opt.name) else "glyphs.json")
     if opt.glyphs:
         if os.path.isfile(target) and os.path.normcase(os.path.abspath(target)) != os.path.normcase(os.path.abspath(opt.glyphs)):
             shutil.copyfile(target, target + ".bak")       # keep the previous file
@@ -1656,8 +1853,9 @@ def cmd_package(opt):
     files = [("SKILL.md", os.path.join(SKILL_DIR, "SKILL.md")),
              ("scripts/my_handwriting.py", os.path.join(HERE, "my_handwriting.py")),
              ("scripts/fallback_font.json", os.path.join(HERE, "fallback_font.json"))]
-    if os.path.isfile(os.path.join(SKILL_DIR, "NOTICE.md")):
-        files.append(("NOTICE.md", os.path.join(SKILL_DIR, "NOTICE.md")))
+    for rel in ("LICENSE", "NOTICE.md"):
+        if os.path.isfile(os.path.join(SKILL_DIR, rel)):
+            files.append((rel, os.path.join(SKILL_DIR, rel)))
     if glyphs:
         files.append(("data/glyphs.json", glyphs))
     tmp = out + ".tmp"
@@ -1861,6 +2059,7 @@ def build_parser():
     sub = p.add_subparsers(dest="cmd")
 
     def common(sp):
+        sp.add_argument("--profile", help=L("Welche Handschrift (Name, siehe info → handwritings)", "Which handwriting (name, see info -> handwritings)"))
         sp.add_argument("--glyphs", default=None,
                         help=L("Proben-Datei aus der App (Standard: data/glyphs.json im Skill, $MY_HANDWRITING_GLYPHS "
                                "oder der neueste Export in Downloads)",
@@ -1890,8 +2089,10 @@ def build_parser():
                                      "Ink colour: blue, black, royal, red, green, pencil or #RRGGBB (default: from the app)"))
     r.add_argument("--paper", choices=["blank", "lined", "grid"], help=L("Papier: blank, lined (liniert), grid (kariert); Standard aus der App",
                                                                          "Paper: blank, lined, grid (squared); default: from the app"))
-    r.add_argument("--align", choices=["left", "center", "right"], default="left")
-    r.add_argument("--variation", type=float, default=1.0, help=L("Natürliche Unregelmäßigkeit 0–2 (Standard 1)", "Natural irregularity 0-2 (default 1)"))
+    r.add_argument("--align", choices=["left", "center", "right"], help=L("Ausrichtung (Standard aus der App, sonst left)", "Alignment (default: from the app, else left)"))
+    r.add_argument("--irregularity", type=float, help=L("Unregelmäßigkeit in %% wie der Regler in der App: 0 = sehr gleichmäßig, 50 = Standard, 100 = stark",
+                                                        "Irregularity in %% like the slider in the app: 0 = very even, 50 = default, 100 = strong"))
+    r.add_argument("--variation", type=float, help=L("Dasselbe als Zahl 0–2 (1 = 50 %%)", "The same as a number 0-2 (1 = 50 %%)"))
     r.add_argument("--tracking", type=float, default=0.15, help=L("Buchstabenabstand (Einheiten, Standard 0.15)", "Letter spacing (units, default 0.15)"))
     r.add_argument("--word-space", type=float, default=0.55, help=L("Wortabstand (Einheiten, Standard 0.55)", "Word spacing (units, default 0.55)"))
     r.add_argument("--kerning", type=float, default=1.0, help=L("Optische Unterschneidung 0–1 (Standard 1)", "Optical kerning 0-1 (default 1)"))
@@ -1905,6 +2106,12 @@ def build_parser():
                    help=L("Fehlende Zeichen in Standard-Handschrift (Standard)", "Missing characters in standard handwriting (default)"))
     g.add_argument("--no-font", dest="font", action="store_false",
                    help=L("Keine Standard-Handschrift: fehlende Zeichen als rote Kästchen", "No standard handwriting: missing characters as red boxes"))
+    g2 = r.add_mutually_exclusive_group()
+    g2.add_argument("--realism", dest="realism", action="store_true", default=None,
+                    help=L("Echt wirken: leichtes Zittern, Dehnen, Stiftdruck (Standard aus der App, sonst an)",
+                           "Look real: slight tremor, stretch, pen pressure (default: from the app, else on)"))
+    g2.add_argument("--no-realism", dest="realism", action="store_false",
+                    help=L("Ruhigere, gleichmäßigere Schrift", "Calmer, more even writing"))
     r.add_argument("--missing", choices=["box", "skip", "error"], default="box",
                    help=L("Zeichen ohne Proben (nur mit --no-font oder ganz unbekannten Zeichen): box = rotes Kästchen, skip = auslassen, error = abbrechen",
                           "Characters without samples (only with --no-font or completely unknown characters): box = red box, skip = leave out, error = stop"))
@@ -1932,6 +2139,8 @@ def build_parser():
     ins = sub.add_parser("install", help=L("Skill für Claude Code einrichten (mit deiner Handschrift-Datei)",
                                            "Install the skill for Claude Code (with your handwriting file)"))
     ins.add_argument("--glyphs", help=L("Exportierte Datei aus der App", "Exported file from the app"))
+    ins.add_argument("--name", help=L("Als weitere Handschrift mit diesem Namen speichern (data/glyphs-<name>.json)",
+                                      "Store as an additional handwriting with this name (data/glyphs-<name>.json)"))
     ins.add_argument("--dest", help=L("Zielordner (Standard: ~/.claude/skills/my-handwriting)", "Target folder (default: ~/.claude/skills/my-handwriting)"))
     ins.set_defaults(func=cmd_install)
 
@@ -1950,7 +2159,8 @@ def validate_opts(opt):
         (opt.line_height is None or 0.8 <= opt.line_height <= 10, L("--line-height muss zwischen 0,8 und 10 liegen.", "--line-height must be between 0.8 and 10.")),
         (opt.line_spacing is None or 1 <= opt.line_spacing <= 200, L("--line-spacing muss zwischen 1 und 200 mm liegen.", "--line-spacing must be between 1 and 200 mm.")),
         (opt.pen is None or 0.05 <= opt.pen <= 10, L("--pen muss zwischen 0,05 und 10 mm liegen.", "--pen must be between 0.05 and 10 mm.")),
-        (0 <= opt.variation <= 3, L("--variation muss zwischen 0 und 3 liegen.", "--variation must be between 0 and 3.")),
+        (opt.irregularity is None or 0 <= opt.irregularity <= 100, L("--irregularity muss zwischen 0 und 100 liegen.", "--irregularity must be between 0 and 100.")),
+        (0 <= opt.variation <= 3, L("--irregularity muss zwischen 0 und 100 liegen (--variation 0–3).", "--irregularity must be between 0 and 100 (--variation 0-3).")),
         (-0.2 <= opt.tracking <= 2, L("--tracking muss zwischen -0,2 und 2 liegen.", "--tracking must be between -0.2 and 2.")),
         (0 <= opt.word_space <= 5, L("--word-space muss zwischen 0 und 5 liegen.", "--word-space must be between 0 and 5.")),
         (0 <= opt.kerning <= 1, L("--kerning muss zwischen 0 und 1 liegen.", "--kerning must be between 0 and 1.")),

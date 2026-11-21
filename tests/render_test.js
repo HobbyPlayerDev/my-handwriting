@@ -20,6 +20,20 @@ const has = (p, kind) => Array.isArray(p) && (p[0] === kind || p.slice(1).some(x
 
 const gs = new R.GlyphSet(data.glyphs, data.metrics.scale);
 ok(gs.total() > 100, 'samples loaded');
+
+// 0a. "fit to text": a short page after [[pagebreak]] stays short
+{
+  const r = R.buildPages('one\ntwo\nthree\nfour\n[[pagebreak]]\nfive', gs, { page: 'auto', markdown: true, seed: 1, font: FONT });
+  ok(r.pages.length === 2 && r.pages[1].h < r.pages[0].h * 0.6, 'fit to text: every page as high as its own lines (' + r.pages.map(p => p.h.toFixed(1)).join(' / ') + ')');
+}
+// 0. kerning: a straight stem keeps only its end points (simplify) - the next letter must not slide into it
+{
+  const bowl = (y0, y1, w) => { const p = []; for (let i = 0; i <= 24; i++) { const a = -Math.PI / 2 + Math.PI * i / 24; p.push(Math.round(100 + w * Math.cos(a)), Math.round((y0 + y1) / 2 + (y1 - y0) / 2 * Math.sin(a))); } return p; };
+  const B = { strokes: [[100, 0, 100, 1000], bowl(1000, 520, 380), bowl(520, 0, 450)] };
+  const pg = R.buildPages('BB', new R.GlyphSet({ B: [B, B, B] }, 1000), { variation: 0, seed: 1, page: 'auto', size: 5 }).pages[0];
+  const right = Math.max(...pg.ink.slice(0, 3).flat().map(p => p[0])), stem = Math.min(...pg.ink[3].map(p => p[0]));
+  ok(stem - right > 0.6, 'kerning: no overlap with a straight stem (BB): gap ' + (stem - right).toFixed(2) + ' mm');
+}
 const ALL = C.BASE.map(b => b.chars).join('') + C.LANG_ORDER.map(c => C.LANG[c]).join('');
 
 // 1. every character of every group is in the fixture and is written from the own samples
@@ -132,6 +146,20 @@ function checkPdf(buf, label) {
   }
 }
 checkPdf(Buffer.from(R.toPDF(long.pages, {}), 'latin1'), 'pdf');
+// broken numbers from an edited file must not become NaN coordinates
+for (const bad of [{ size: 'abc' }, { variation: 'x' }, { margin: 'q', page: 'auto', width: NaN }]) {
+  const pg = R.buildPages('Hi', gs, Object.assign({ seed: 1, font: FONT }, bad)).pages[0];
+  ok(pg.ink.length && pg.ink.every(s => s.every(p => isFinite(p[0]) && isFinite(p[1]))), 'no NaN with ' + JSON.stringify(bad));
+}
+// one long paragraph must stay linear (charsToItems once joined the whole rest for every character)
+{
+  const t0 = Date.now(), para = 'Lorem ipsum dolor sit amet. '.repeat(800);
+  const r = R.buildPages(para, gs, { seed: 1, font: FONT });
+  ok(r.pages.length > 10 && Date.now() - t0 < 15000, 'long paragraph: ' + r.pages.length + ' pages in ' + (Date.now() - t0) + ' ms');
+  const multi = new R.GlyphSet(Object.assign({}, data.glyphs, { 'ab': data.glyphs.a }), data.metrics.scale);
+  const items = new R.Typesetter(multi, R.makeRng(1), { font: FONT }).charsToItems('xaby');
+  ok(items.some(it => it[0] === 'g' && it[1] === 'ab'), 'multi-character key still found');
+}
 R.toPDFBlob(long.pages, { color: 'black' }).then(blob => blob.arrayBuffer()).then(ab => {
   const buf = Buffer.from(ab);
   checkPdf(buf, 'pdf-z');

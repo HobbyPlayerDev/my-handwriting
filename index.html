@@ -3,27 +3,77 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Teach the computer your handwriting – write each character a few times, then turn any text into your handwriting (PNG, SVG, PDF). Runs offline, nothing is uploaded.">
-<meta name="theme-color" content="#1f2f86">
+<meta name="description" content="Teach Claude your handwriting – write each character a few times, then Claude (or the app itself) turns any text into your handwriting (PDF, PNG, SVG). Runs offline, nothing is uploaded.">
+<meta name="theme-color" content="#f5f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Handwriting">
 <title>My Handwriting</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+<!-- Icons (own drawings, 24 × 24, stroke = currentColor) -->
+<svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l1.2-4.6L15.4 5.2a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z"/><path d="M13.5 7l3.5 3.5"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M6 4.5h12a2.5 2.5 0 0 1 2.5 2.5v7.5A2.5 2.5 0 0 1 18 17h-6l-4.5 3.5V17H6a2.5 2.5 0 0 1-2.5-2.5V7A2.5 2.5 0 0 1 6 4.5z"/><path d="M12 8v5M9.5 10.5h5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 16V5M7 9.5l5-5 5 5M5 20h14"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4.5 7h15M4.5 12h15M4.5 17h15"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h8.5M17.5 7H20M4 17h2.5M11.5 17H20"/><circle cx="15" cy="7" r="2.5"/><circle cx="9" cy="17" r="2.5"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5.5 21V4M5.5 4.5h11l-2.5 4 2.5 4h-11"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8v.3"/><path d="M12 17.2v.1"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 6 12 6s9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 5.5L4.5 10 9 14.5"/><path d="M4.5 10h10a5 5 0 0 1 0 10H11"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M10 7V4.5h4V7M6.5 7l1 13h9l1-13"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="M14.5 5.5L8 12l6.5 6.5"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="M9.5 5.5L16 12l-6.5 6.5"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M7 9.5l5 5 5-5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M4 7h2.5c5 0 6 10 11 10H20M4 17h2.5c1.6 0 2.7-1 3.6-2.4M13.9 9.4C14.8 8 16 7 17.5 7H20M17.5 4.5L20 7l-2.5 2.5M17.5 14.5L20 17l-2.5 2.5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V7A2.5 2.5 0 0 0 13 4.5H7A2.5 2.5 0 0 0 4.5 7v6A2.5 2.5 0 0 0 7 15.5h1.5"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24"><path d="M13.5 4.5h6v6M19.5 4.5L11 13M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6.5" y="2.8" width="11" height="18.4" rx="2.6"/><path d="M10.5 18h3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-done" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.8 2.8L16.2 9.5"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4.5l8.5 15h-17z"/><path d="M12 10v4.2M12 17v.1"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 2.6 2.8 15.4 0 18M12 3c-2.8 2.6-2.8 15.4 0 18"/></symbol>
+  <symbol id="i-person" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.5 7-5.5s6.2 1.9 7 5.5"/></symbol>
+  <symbol id="i-nib" viewBox="0 0 24 24"><path d="M12 21v-6M12 15l-5-5 5-6.5 5 6.5z"/><circle cx="12" cy="10.5" r="1.2"/></symbol>
+</svg>
+
+<div class="bootfail" id="bootFail"><b>My Handwriting could not start.</b> Please open it in a current browser (Chrome, Edge, Firefox or Safari) with JavaScript turned on.<br>
+<b>Die App konnte nicht starten.</b> Bitte in einem aktuellen Browser mit eingeschaltetem JavaScript öffnen.</div>
+
 <header>
-  <h1><img src="icon.svg" alt="" width="26" height="26"> <span data-i18n="app.title">My Handwriting</span></h1>
+  <h1><img src="icon.svg" alt="" width="28" height="28"> <span class="brand" data-i18n="app.title">My Handwriting</span></h1>
+  <button class="prof" id="profBtn" type="button" aria-haspopup="menu" data-i18n-title="prof.title"><span id="profName"></span><svg class="ic sm" aria-hidden="true"><use href="#i-chev"/></svg></button>
   <div class="progress"><div class="bar"><i id="barFill"></i></div><span id="progressText">0 %</span></div>
-  <button class="badge" id="penBadge" type="button" data-i18n-title="pen.badgeTitle" data-i18n="pen.badge"></button>
+  <button class="badge" id="penBadge" type="button" data-i18n-title="pen.badgeTitle"><svg class="ic sm" aria-hidden="true"><use href="#i-nib"/></svg><span data-i18n="pen.badge"></span></button>
   <span class="status" id="saveStatus" data-i18n="save.loading">…</span>
   <div class="hdr-btns">
-    <button id="btnWrite" class="accent" type="button" data-i18n-title="hdr.write">✍️<span class="lbl" data-i18n="hdr.write"></span></button>
-    <button id="btnImport" type="button" data-i18n-title="hdr.import">📂<span class="lbl" data-i18n="hdr.import"></span></button>
-    <button id="btnExport" class="primary" type="button" data-i18n-title="hdr.export">💾<span class="lbl" data-i18n="hdr.export"></span></button>
-    <button id="btnSettings" type="button" data-i18n-title="hdr.settings" data-i18n-aria="hdr.settings">⚙︎</button>
-    <button id="btnHelp" type="button" data-i18n-title="hdr.help" data-i18n-aria="hdr.help">?</button>
-    <select id="langSel" data-i18n-title="hdr.lang" data-i18n-aria="hdr.lang"></select>
+    <button id="btnWrite" class="primary" type="button" data-i18n-title="hdr.write"><svg class="ic" aria-hidden="true"><use href="#i-pen"/></svg><span class="lbl" data-i18n="hdr.write"></span></button>
+    <button id="btnClaude" type="button" data-i18n-title="hdr.claude"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg><span class="lbl" data-i18n="hdr.claude"></span></button>
+    <button id="btnExport" type="button" data-i18n-title="hdr.export"><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg><span class="lbl" data-i18n="hdr.export"></span></button>
+    <button id="btnMore" class="icon-only" type="button" aria-haspopup="menu" data-i18n-title="hdr.more" data-i18n-aria="hdr.more"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
   </div>
+  <div class="menu" id="moreMenu" role="menu" hidden>
+    <button type="button" role="menuitem" data-act="import"><svg class="ic" aria-hidden="true"><use href="#i-up"/></svg><span data-i18n="hdr.import"></span></button>
+    <button type="button" role="menuitem" data-act="settings"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span data-i18n="hdr.settings"></span></button>
+    <button type="button" role="menuitem" data-act="setup"><svg class="ic" aria-hidden="true"><use href="#i-flag"/></svg><span data-i18n="menu.setup"></span></button>
+    <button type="button" role="menuitem" data-act="install"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg><span data-i18n="menu.install"></span></button>
+    <button type="button" role="menuitem" data-act="help"><svg class="ic" aria-hidden="true"><use href="#i-help"/></svg><span data-i18n="hdr.help"></span></button>
+    <div class="menu-sep"></div>
+    <div class="menu-title"><svg class="ic sm" aria-hidden="true"><use href="#i-globe"/></svg><span data-i18n="hdr.lang"></span></div>
+    <div class="menu-langs" id="menuLangs" role="group" data-i18n-aria="hdr.lang"></div>
+  </div>
+  <div class="menu" id="profMenu" role="menu" hidden></div>
   <input type="file" id="fileInput" accept=".json,application/json" hidden>
 </header>
 
@@ -39,20 +89,22 @@
     </div>
   </div>
 
-  <div class="padwrap" id="padwrap"><canvas id="pad" data-i18n-aria="pad.aria"></canvas></div>
+  <div class="padwrap" id="padwrap"><canvas id="pad" data-i18n-aria="pad.aria"></canvas><div class="pad-ok" id="padOk" aria-hidden="true"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></div></div>
 
   <div class="controls">
-    <button id="btnBack" type="button" data-i18n="ctl.back" data-i18n-title="ctl.backTitle"></button>
-    <button id="btnSkip" type="button" data-i18n="ctl.skip" data-i18n-title="ctl.skipTitle"></button>
+    <div class="seg">
+      <button id="btnBack" type="button" data-i18n-title="ctl.backTitle"><svg class="ic" aria-hidden="true"><use href="#i-left"/></svg><span class="lbl" data-i18n="ctl.back"></span></button>
+      <button id="btnSkip" type="button" data-i18n-title="ctl.skipTitle"><span class="lbl" data-i18n="ctl.skip"></span><svg class="ic" aria-hidden="true"><use href="#i-right"/></svg></button>
+    </div>
     <span class="spacer"></span>
-    <button id="btnTemplate" type="button" class="toggle" data-i18n-title="ctl.templateTitle">👁<span class="lbl" data-i18n="ctl.template"></span></button>
-    <button id="btnUndo" type="button" data-i18n="ctl.undo" data-i18n-title="ctl.undoTitle"></button>
-    <button id="btnClear" type="button" data-i18n="ctl.clear" data-i18n-title="ctl.clearTitle"></button>
-    <button id="btnSave" type="button" class="primary" data-i18n="ctl.save" data-i18n-title="ctl.saveTitle"></button>
+    <button id="btnTemplate" type="button" class="toggle" data-i18n-title="ctl.templateTitle"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg><span class="lbl" data-i18n="ctl.template"></span></button>
+    <button id="btnUndo" type="button" data-i18n-title="ctl.undoTitle"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg><span class="lbl" data-i18n="ctl.undo"></span></button>
+    <button id="btnClear" type="button" data-i18n-title="ctl.clearTitle"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg><span class="lbl" data-i18n="ctl.clear"></span></button>
+    <button id="btnSave" type="button" class="primary save" data-i18n-title="ctl.saveTitle"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span data-i18n="ctl.save"></span></button>
   </div>
   <div class="keys" data-i18n-html="keysHtml"></div>
-  <div class="banner" id="exportBanner"><span id="exportBannerText"></span><button id="bannerExport" type="button" class="primary" data-i18n="banner.exportNow"></button></div>
-  <div class="banner ok" id="doneBanner"><span data-i18n="banner.done"></span><button id="doneWrite" type="button" class="primary" data-i18n="banner.doneBtn"></button></div>
+  <div class="banner" id="exportBanner"><svg class="ic" aria-hidden="true"><use href="#i-warn"/></svg><span id="exportBannerText"></span><button id="bannerExport" type="button" class="primary" data-i18n="banner.exportNow"></button></div>
+  <div class="banner ok" id="doneBanner"><svg class="ic" aria-hidden="true"><use href="#i-done"/></svg><span data-i18n="banner.done"></span><button id="doneWrite" type="button" class="primary" data-i18n="banner.doneBtn"></button></div>
 
   <div class="samples" id="samples"></div>
 </main>
@@ -61,14 +113,16 @@
 </div>
 
 <!-- Introduction / setup wizard -->
-<div class="modal-bg" id="mWizard"><div class="modal narrow wizard" role="dialog" aria-modal="true">
+<div class="modal-bg" id="mWizard"><div class="modal setup" role="dialog" aria-modal="true">
+  <nav class="wiz-nav" id="wizNav"></nav>
+  <div class="wiz-main">
   <div class="wiz-step" id="wizStep"></div>
   <div id="wizBody"></div>
-  <div class="row">
-    <button type="button" id="wizSkip" data-i18n="wiz.skip"></button>
+  <div class="row wiz-row">
     <span class="spacer"></span>
     <button type="button" id="wizPrev" data-i18n="wiz.prev"></button>
     <button type="button" id="wizNext" class="primary"></button>
+  </div>
   </div>
 </div></div>
 
@@ -76,6 +130,7 @@
   <h2 data-i18n="help.title"></h2>
   <div class="help" data-i18n-html="help.bodyHtml"></div>
   <div class="help" data-i18n-html="help.claudeHtml"></div>
+  <p class="small"><a href="https://github.com/HobbyPlayerDev/my-handwriting" target="_blank" rel="noopener noreferrer">GitHub</a> · <span id="helpVersion"></span></p>
   <div class="row">
     <button type="button" id="helpRestart" data-i18n="help.restart"></button>
     <span class="spacer"></span>
@@ -83,11 +138,27 @@
   </div>
 </div></div>
 
+<div class="modal-bg" id="mInstall"><div class="modal narrow" role="dialog" aria-modal="true">
+  <h2 data-i18n="inst.title"></h2>
+  <p data-i18n="inst.intro"></p>
+  <p class="inst-note" id="instDone" hidden><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span data-i18n="inst.done"></span></p>
+  <p class="inst-note warn" id="instFile" hidden><span data-i18n-html="inst.fileHtml"></span></p>
+  <p id="instNowRow" hidden><button type="button" id="instNow" class="primary"><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg><span data-i18n="inst.now"></span></button></p>
+  <dl class="help-list inst-list">
+    <dt data-dev="ios"><span data-i18n="inst.ios"></span> <small class="me" data-i18n="inst.yours"></small></dt><dd data-dev="ios" data-i18n="inst.iosText"></dd>
+    <dt data-dev="android"><span data-i18n="inst.android"></span> <small class="me" data-i18n="inst.yours"></small></dt><dd data-dev="android" data-i18n="inst.androidText"></dd>
+    <dt data-dev="desktop"><span data-i18n="inst.desktop"></span> <small class="me" data-i18n="inst.yours"></small></dt><dd data-dev="desktop" data-i18n="inst.desktopText"></dd>
+    <dt><span data-i18n="inst.offline"></span></dt><dd data-i18n="inst.offlineText"></dd>
+  </dl>
+  <p class="small" data-i18n="inst.data"></p>
+  <p class="small" data-i18n="inst.zip"></p>
+  <div class="row"><span class="spacer"></span><button type="button" class="primary" data-close data-i18n="btn.close"></button></div>
+</div></div>
+
 <div class="modal-bg" id="mExport"><div class="modal narrow" role="dialog" aria-modal="true">
   <h2 data-i18n="export.title"></h2>
   <p id="exportInfo"></p>
   <p class="small" data-i18n="export.hint"></p>
-  <p class="small" id="exportClaude"></p>
   <div class="row">
     <button type="button" id="btnCopy" data-i18n="export.copy"></button>
     <button type="button" id="btnShowJson" data-i18n="export.show"></button>
@@ -125,16 +196,17 @@
           <select id="wColor"><option value="blue" data-i18n="color.blue"></option><option value="royal" data-i18n="color.royal"></option><option value="black" data-i18n="color.black"></option><option value="pencil" data-i18n="color.pencil"></option><option value="red" data-i18n="color.red"></option><option value="green" data-i18n="color.green"></option></select></label>
         <label><span data-i18n="write.align"></span>
           <select id="wAlign"><option value="left" data-i18n="align.left"></option><option value="center" data-i18n="align.center"></option><option value="right" data-i18n="align.right"></option></select></label>
-        <label><span data-i18n="write.variation"></span>
+        <label><span><span data-i18n="write.variation"></span> <b class="rv"></b></span>
           <input type="range" id="wVar" min="0" max="2" step="0.1"></label>
       </div>
       <label class="check"><input type="checkbox" id="wMarkdown"> <span data-i18n="write.markdown"></span></label>
-      <label class="check"><input type="checkbox" id="wFallback"> <span data-i18n="write.fallbackOn"></span></label>
+      <label class="check" data-i18n-title="set.realismHint"><input type="checkbox" id="wRealism"> <span data-i18n="set.realismOn"></span></label>
+      <label class="check" data-i18n-title="set.fallbackHint"><input type="checkbox" id="wFallback"> <span data-i18n="write.fallbackOn"></span></label>
       <label class="check"><input type="checkbox" id="wTransparent"> <span data-i18n="write.transparent"></span></label>
     </div>
     <div class="write-preview">
       <div class="row tight">
-        <button type="button" id="wReroll" data-i18n="write.reroll"></button>
+        <button type="button" id="wReroll"><svg class="ic" aria-hidden="true"><use href="#i-shuffle"/></svg><span data-i18n="write.reroll"></span></button>
         <span class="spacer"></span>
         <span class="small" data-i18n="write.download"></span>
         <button type="button" id="wPng" class="primary">PNG</button>
@@ -145,49 +217,105 @@
       <div class="wcanvas"><canvas id="wCanvas"></canvas></div>
     </div>
   </div>
-  <div class="row"><span class="spacer"></span><button type="button" class="primary" data-close data-i18n="btn.close"></button></div>
 </div></div>
 
 <div class="modal-bg" id="mSettings"><div class="modal narrow" role="dialog" aria-modal="true">
   <h2 data-i18n="set.title"></h2>
-  <label class="f" for="setLang" data-i18n="set.lang"></label>
-  <select id="setLang"></select>
-  <label class="f" for="setTarget" data-i18n="set.target"></label>
-  <input type="number" id="setTarget" min="1" max="50" step="1"> <span class="small" data-i18n="set.targetHint"></span>
-  <label class="f" data-i18n="set.scripts"></label>
-  <div class="scripts" id="setScripts"></div>
-  <div class="small" data-i18n="set.scriptsHint"></div>
-  <label class="f" data-i18n="set.template"></label>
-  <label class="check"><input type="checkbox" id="setTemplate"> <span data-i18n="set.templateOn"></span></label>
-  <div class="range-row"><span data-i18n="set.templateAlpha"></span> <input type="range" id="setAlpha" min="0.04" max="0.4" step="0.01"> <span id="setAlphaVal" class="small"></span></div>
-  <div class="small" data-i18n="set.templateHint"></div>
-  <label class="f" data-i18n="set.fallback"></label>
-  <label class="check"><input type="checkbox" id="setFallback"> <span data-i18n="set.fallbackOn"></span></label>
-  <div class="small" data-i18n="set.fallbackHint"></div>
-  <label class="f" data-i18n="set.claude"></label>
-  <div class="fields">
-    <label><span data-i18n="set.claudeLang"></span><select id="setClaudeLang"></select></label>
-    <label><span data-i18n="write.paper"></span><select id="setClaudePaper"></select></label>
-    <label><span data-i18n="write.size"></span><select id="setClaudeSize"></select></label>
-    <label><span data-i18n="write.color"></span><select id="setClaudeColor"></select></label>
-    <label><span data-i18n="write.page"></span><select id="setClaudePage"></select></label>
-  </div>
-  <div class="small" data-i18n="set.claudeHint"></div>
-  <label class="f" for="setMode" data-i18n="set.mode"></label>
-  <select id="setMode"><option value="char" data-i18n="set.modeChar"></option><option value="round" data-i18n="set.modeRound"></option></select>
-  <label class="f" for="setPen" data-i18n="set.pen"></label>
-  <select id="setPen"><option value="auto" data-i18n="set.penAuto"></option><option value="off" data-i18n="set.penOff"></option><option value="on" data-i18n="set.penOn"></option></select>
-  <label class="f" for="setCustom" data-i18n="set.custom"></label>
-  <input type="text" id="setCustom" data-i18n-ph="set.customPh">
-  <div class="small" data-i18n="set.customHint"></div>
-  <label class="f" data-i18n="set.storage"></label>
-  <div class="small" id="storageInfo"></div>
-  <div class="row">
-    <button type="button" id="btnWipe" class="danger" data-i18n="set.wipe"></button>
+  <section class="set-group">
+    <h3 data-i18n="set.handwritings"></h3>
+    <div class="small" data-i18n="prof.hint"></div>
+    <div class="profiles" id="setProfiles"></div>
+  </section>
+  <section class="set-group">
+    <h3 data-i18n="set.writing"></h3>
+    <label class="f" for="setLang" data-i18n="set.lang"></label>
+    <select id="setLang"></select>
+    <label class="f" for="setTarget" data-i18n="set.target"></label>
+    <input type="number" id="setTarget" min="1" max="50" step="1"> <span class="small" data-i18n="set.targetHint"></span>
+    <label class="f" data-i18n="set.scripts"></label>
+    <div class="scripts" id="setScripts"></div>
+    <div class="small" data-i18n="set.scriptsHint"></div>
+    <label class="f" for="setMode" data-i18n="set.mode"></label>
+    <select id="setMode"><option value="char" data-i18n="set.modeChar"></option><option value="round" data-i18n="set.modeRound"></option></select>
+    <label class="f" for="setCustom" data-i18n="set.custom"></label>
+    <input type="text" id="setCustom" data-i18n-ph="set.customPh">
+    <div class="small" data-i18n="set.customHint"></div>
+  </section>
+  <section class="set-group">
+    <h3 data-i18n="set.input"></h3>
+    <label class="check"><input type="checkbox" id="setTemplate"> <span data-i18n="set.templateOn"></span></label>
+    <div class="range-row"><span data-i18n="set.templateAlpha"></span> <input type="range" id="setAlpha" min="0.04" max="0.4" step="0.01"> <span id="setAlphaVal" class="small"></span></div>
+    <label class="f" for="setPen" data-i18n="set.pen"></label>
+    <select id="setPen"><option value="auto" data-i18n="set.penAuto"></option><option value="off" data-i18n="set.penOff"></option><option value="on" data-i18n="set.penOn"></option></select>
+  </section>
+  <section class="set-group">
+    <h3 data-i18n="set.docs"></h3>
+    <div class="small" data-i18n="set.docsHint"></div>
+    <div class="fields">
+      <label><span data-i18n="write.paper"></span><select id="setClaudePaper"></select></label>
+      <label><span data-i18n="write.size"></span><select id="setClaudeSize"></select></label>
+      <label><span data-i18n="write.color"></span><select id="setClaudeColor"></select></label>
+      <label><span data-i18n="write.page"></span><select id="setClaudePage"></select></label>
+      <label><span data-i18n="write.align"></span><select id="setClaudeAlign"></select></label>
+      <label><span><span data-i18n="write.variation"></span> <b class="rv"></b></span><input type="range" id="setClaudeVar" min="0" max="2" step="0.1"></label>
+    </div>
+    <label class="check"><input type="checkbox" id="setRealism"> <span data-i18n="set.realismOn"></span></label>
+    <div class="small" data-i18n="set.realismHint"></div>
+    <label class="check"><input type="checkbox" id="setFallback"> <span data-i18n="set.fallbackOn"></span></label>
+    <div class="small" data-i18n="set.fallbackHint"></div>
+  </section>
+  <section class="set-group">
+    <h3 data-i18n="set.storage"></h3>
+    <div class="small" id="storageInfo"></div>
+    <div class="row tight wrap gap-top">
+      <button type="button" id="btnWipe" class="danger" data-i18n="set.wipe"></button>
+      <button type="button" id="btnReset" class="danger" data-i18n="set.reset"></button>
+    </div>
+    <div class="small" data-i18n="set.resetHint"></div>
+  </section>
+  <div class="row sticky-row">
     <span class="spacer"></span>
     <button type="button" data-close data-i18n="btn.cancel"></button>
     <button type="button" id="btnSettingsSave" class="primary" data-i18n="btn.apply"></button>
   </div>
+</div></div>
+
+<div class="modal-bg" id="mClaude"><div class="modal narrow" role="dialog" aria-modal="true">
+  <h2 data-i18n="cl.title"></h2>
+  <p class="lead" data-i18n="cl.intro"></p>
+  <div class="note" id="clEmpty" data-i18n="cl.noSamples"></div>
+  <ol class="steps">
+    <li><span class="n">1</span><div>
+      <b data-i18n="cl.s1Title"></b>
+      <p data-i18n="cl.s1"></p>
+      <label class="check" id="clAllRow"><input type="checkbox" id="clAll"> <span id="clAllText"></span></label>
+      <p class="which" id="clWhich"></p>
+      <button type="button" class="primary" id="clZip"><svg class="ic" aria-hidden="true"><use href="#i-down"/></svg><span data-i18n="cl.zip"></span></button>
+      <div class="small ok-text" id="clStatus" role="status"></div>
+    </div></li>
+    <li><span class="n">2</span><div>
+      <b data-i18n="cl.s2Title"></b>
+      <p data-i18n="cl.s2"></p>
+      <a class="btn" id="clOpen" href="https://claude.ai/customize/skills" target="_blank" rel="noopener noreferrer"><svg class="ic" aria-hidden="true"><use href="#i-ext"/></svg><span data-i18n="cl.open"></span></a>
+      <p class="small" data-i18n-html="cl.s2NoteHtml"></p>
+    </div></li>
+    <li><span class="n">3</span><div>
+      <b data-i18n="cl.s3Title"></b>
+      <p data-i18n="cl.s3"></p>
+      <div class="example"><span id="clExample" data-i18n="cl.example"></span><button type="button" id="clCopy" class="icon-only" data-i18n-title="cl.copy" data-i18n-aria="cl.copy"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg></button></div>
+      <p class="small" data-i18n-html="cl.nameHtml"></p>
+    </div></li>
+  </ol>
+  <p class="small" data-i18n="cl.update"></p>
+  <p class="small with-ic"><svg class="ic sm" aria-hidden="true"><use href="#i-lock"/></svg><span data-i18n="cl.private"></span></p>
+  <textarea id="clText" readonly class="mono"></textarea>
+</div></div>
+
+<div class="lock" id="tabLock" hidden><div class="lock-card">
+  <svg class="ic big" aria-hidden="true"><use href="#i-lock"/></svg>
+  <h2 data-i18n="tab.title"></h2>
+  <p data-i18n="tab.text"></p>
+  <button type="button" class="primary" id="tabUse" data-i18n="tab.use"></button>
 </div></div>
 
 <div id="toast" role="status"><span id="toastText"></span><button type="button" id="toastBtn"></button></div>
@@ -202,6 +330,8 @@
 <script src="js/charsets.js"></script>
 <script src="js/fallback-font.js"></script>
 <script src="js/render.js"></script>
+<script src="js/zip.js"></script>
+<script src="js/ui-select.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
