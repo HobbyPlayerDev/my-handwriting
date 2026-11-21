@@ -20,7 +20,7 @@
   <a href="https://hobbyplayerdev.github.io/my-handwriting/">▶ Open the app</a> ·
   <a href="#-installation">Installation</a> ·
   <a href="#-use-in-claude">Use in Claude</a> ·
-  <a href="https://github.com/HobbyPlayerDev/my-handwriting/issues">Report a bug</a>
+  <a href="https://github.com/HobbyPlayerDev/my-handwriting/issues/new/choose">Report a bug</a>
 </h3>
 
 ## 🚀 Installation
@@ -165,7 +165,7 @@ the skill folder, newest export in Downloads). All options: `render --help`. Det
 ## 🔒 Privacy and fair use
 
 - No server, no tracking, no cookies, no network requests (except when you open a claude.ai link).
-  GitHub Pages logs IP addresses like any web host ([GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement)).
+  GitHub Pages logs IP addresses like any web host ([GitHub's privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)).
 - Handwriting is personal data. Treat your sample file and the skill ZIP like a password, and
   **never attach them to a GitHub issue** – a screenshot is enough.
 - Only meant for your own purposes – never for signatures, forged documents or exams.
@@ -179,7 +179,7 @@ the skill folder, newest export in Downloads). All options: `render --help`. Det
 | Android, iPhone, iPad (Apple Pencil) | 🟡 phone layout tested; real devices not yet |
 | Python script / skill | ✅ Windows, macOS, Linux, Python 3.8+ |
 
-Something wrong on your device? Please [open an issue](https://github.com/HobbyPlayerDev/my-handwriting/issues)
+Something wrong on your device? Please [open an issue](https://github.com/HobbyPlayerDev/my-handwriting/issues/new/choose)
 with the device, browser and what happened.
 
 ## ⚖️ How it compares
@@ -213,7 +213,7 @@ architecture and ideas: [docs/CONCEPT.md](docs/CONCEPT.md). Release checklist:
 
 ## ⚡ Built with Claude
 
-This project was developed with [Claude Code](https://claude.com/claude-code), Anthropic's AI coding
+This project was developed with [Claude Code](https://claude.com/product/claude-code), Anthropic's AI coding
 assistant: the code, tests, translations and documentation were written in conversation with Claude,
 and every change was tested in the browser and with the scripts above. [CLAUDE.md](CLAUDE.md) holds
 the project notes Claude works with.
