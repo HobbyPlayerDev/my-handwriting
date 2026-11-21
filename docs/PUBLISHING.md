@@ -4,7 +4,7 @@
 
 | Question | Result |
 |---|---|
-| Personal data in the code? | None: no names, e-mail addresses, local paths or real samples. Sample files (`skill/my-handwriting/data/`, `*-glyphs-*.json`, `my-handwriting-skill.zip`), outputs and `out/` are in `.gitignore`. The screenshot uses a hand-drawn test letter and the synthetic fixture. |
+| Personal data in the code? | None: no names, e-mail addresses, local paths or real samples. Sample files (`skill/my-handwriting/data/`, `*-glyphs-*.json`, `my-handwriting-skill.zip`), outputs and `out/` are in `.gitignore`. The README example and screenshot show an example handwriting the owner wrote in the app (pictures only, no sample file). |
 | E-mail in commits | Git writes the author e-mail into every commit. Use the GitHub `…@users.noreply.github.com` address (GitHub → Settings → Emails → "Keep my email addresses private"). Check: `git log --format=%ae` shows only the noreply address. |
 | License | MIT (`LICENSE`, a copy in `skill/my-handwriting/` so the skill ZIP carries it too). Third-party data: Hershey fonts (free use with acknowledgement, `NOTICE.md`, `tools/hershey/LICENSE-hershey.txt`). No other third-party code, fonts or images. |
 | Icons / logos | All icons drawn for this project (SVG sprite in `index.html`, `icon.svg`, `icons/*.png`). No Claude/Anthropic logo, no Anthropic brand colour, no emoji images. |

@@ -22,8 +22,9 @@ The data is stored here in its own JSON/JavaScript format (not the format distri
 
 The app icon and all interface icons (the SVG sprite in `index.html`, `icon.svg`, `icons/*.png`) were
 drawn for this project and are covered by the MIT License. The README pictures were made for this project
-too: the banner title (`docs/banner.png`) is drawn by hand, its subtitle and `docs/example.png` use the app's
-own standard handwriting (no handwriting samples). No icon fonts, emoji images or logos of
+too: the banner title (`docs/banner.png`) is drawn by hand; `docs/example.png` and `docs/screenshot.png` show
+an example handwriting written in the app by the project owner (punctuation from the standard
+handwriting). No sample files are included. No icon fonts, emoji images or logos of
 other companies are included.
 
 ## Trademarks

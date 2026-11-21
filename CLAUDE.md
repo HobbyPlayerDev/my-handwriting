@@ -16,7 +16,8 @@ More: `README.md`, `docs/CONCEPT.md` (full concept, data format, limits, ideas),
   external fonts/libraries). Must work by double-click (`file://`) **and** over https (GitHub Pages).
 - Python: standard library only, Python ≥ 3.8; Pillow only optional (PNG, `tests/make_fixture.py`).
   The skill folder `skill/my-handwriting/` must stay self-contained (it is copied by `install`).
-- **Never real handwriting samples in the repository.** Tests use the synthetic samples of
+- **Never real handwriting sample files in the repository** (exports, `data/`, skill ZIPs). The README
+  pictures `docs/example.png` + `docs/screenshot.png` show an example handwriting the owner wrote in the app. Tests use the synthetic samples of
   `tests/make_fixture.py`. `.gitignore` excludes `skill/my-handwriting/data/`, exports, `out/`.
 - Data format `my-handwriting-glyphs` v1: only **extend**; old files must stay readable
   (`handschrift-glyphs` = old name, files without `scripts` = German).
@@ -51,12 +52,15 @@ More: `README.md`, `docs/CONCEPT.md` (full concept, data format, limits, ideas),
 - Only one tab may run: opening a second tab pauses the first (`#tabLock`). Tests with two tabs: the
   older one shows "Use here" (reload). Close extra preview tabs, or the main tab stays paused.
 - README screenshot / PNG icons: rendered with Edge headless over the DevTools protocol (Node 22 has
-  `WebSocket`), with the synthetic fixture only. Scripts are not in the repo; re-create when needed.
-- README banner / example (`docs/banner.png`, `docs/example.png`): `render` with a glyph file holding
-  one dummy sample (`|`), so every letter comes from the standard handwriting (a file with no samples
-  is refused); banner = icon-512 + white title/subtitle (`--transparent --no-realism`) composed with
+  `WebSocket`; light mode via `Emulation.setEmulatedMedia`). Scripts are not in the repo; re-create when
+  needed. The screenshot shows the owner's "g" (their export copied to `out/`, merged in a fresh headless
+  profile, the sample replayed on `#pad` with pointer events, not saved).
+- README example (`docs/example.png`): written with the owner's installed skill (`render --markdown
+  --page auto --width 120 --size 4 --paper lined --color blue`), text: the old note with "written by Claude", no caption under it. Banner
+  (`docs/banner.png`): `render` with a glyph file holding one dummy sample (`|`) for the standard
+  handwriting (a file with no samples is refused); banner = icon-512 + white title/subtitle (`--transparent --no-realism`) composed with
   Pillow on navy with faint ruled lines. The title is now drawn by hand by the owner (Paint.NET) - keep
-  their banner, do not regenerate it. Never use the user's real exports (e.g. in Downloads) here.
+  their banner, do not regenerate it. Use the owner's handwriting in pictures only when they ask.
 - README preview without GitHub: `out/readme-preview.html` (ignored; marked + github-markdown-css
   from jsDelivr) over the local server. Notion and similar tools cannot show relative images.
 - After editing files, the preview browser may still run the **old cached** `app.js` (python's
@@ -216,5 +220,5 @@ time, start-fail message, PNG icons, README screenshot, Claude trademark note.
 everything, "Use in Claude" (skill ZIP built in the browser + copy-paste messages), `--profile`.
 1.0.0 (2026-11-17): 6 languages, wizard with Claude settings, standard handwriting, Markdown, skill
 install/package/info, pen hover/palm handling, own characters in the overview.
-Open: real devices (pen laptop with S Pen, iPad + Pencil, Android), Safari storage (7-day rule),
-publishing (docs/PUBLISHING.md). Ideas: docs/CONCEPT.md → "Ideas for later".
+Published 2026-11-21: GitHub (public) + Pages + release v1.5.1. Open: real devices (pen laptop with S Pen,
+iPad + Pencil, Android), Safari storage (7-day rule). Ideas: docs/CONCEPT.md → "Ideas for later".

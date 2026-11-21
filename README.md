@@ -56,12 +56,11 @@ about 2020 or newer (Chrome/Edge 80+, Firefox 78+, Safari 14+).
 ## ✍️ Output
 
 <p align="center">
-  <img src="docs/example.png" alt="A note written by the app on lined paper" width="480">
+  <img src="docs/example.png" alt="A handwritten note on lined paper, written by Claude with my-handwriting" width="480">
 </p>
-<p align="center"><sub>Written by the skill that Claude uses – here with the built-in standard handwriting. With your samples it looks like you.</sub></p>
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="The app: writing area and overview" width="100%">
+  <img src="docs/screenshot.png" alt="The app: writing a g on the writing area, overview on the right" width="100%">
 </p>
 
 ## 🏁 How it works
