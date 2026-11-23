@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.6.0 - 2026-11-23
+- **Nothing is cut off at the edge any more:** slant, tremor and pen width can carry a stroke a little
+  past the writing line. With no margin (`--margin 0`, e.g. when Claude wrote single digits for a
+  calculation) that part was cut off – a "0" looked open, a "1" lost its up-stroke. Now the writing is
+  moved inside, and with "Fit to text" the page grows a little. Same in the app (PNG/SVG/PDF).
+- **No light rim around letters** in transparent PNGs: the soft edge pixels mixed in white, so letters
+  placed on paper or into a PDF had a pale outline. Now the edges keep the ink colour.
+- **Writing area size** (Settings → Writing area): 10–160 %, live while you slide – or **Ctrl + mouse
+  wheel** on the writing side of the page (⌘ on a Mac; a touchpad pinch works too). Smaller for small letters,
+  bigger for big letters on a large screen. Saved for this device only; your samples stay the same at
+  every size. On a small area the line names are left out, so nothing lies across the letter.
+- **Line width while writing** (Settings → Writing area): 25–300 %, e.g. thinner lines on a big area,
+  thicker ones on a small one. Only how the lines look while you write (this device) – your samples
+  and the documents stay the same.
+- **Tidier settings:** the small grey explanations are gone, shorter texts ("Character by character",
+  "In rounds (A, B, C …)", "Automatic"), the two red buttons stay the same size side by side – the
+  "press again" text wraps inside instead of pushing the other button away.
+- Tested on a real Android phone, iPhone and iPad: everything works (README "Tested on").
+- **Claude knows more:** you decide what to write – learning notes, homework, calculations, letters,
+  thank-you cards, job applications. For calculations and worksheets Claude keeps a margin and places
+  pieces with the new `page_boxes` of the report (page size and where the ink is, in mm) instead of
+  guessing at the image edge.
+
 ## 1.5.1 - 2026-11-20
 - **Claude can set everything the app can:** size, paper, format, colour, alignment, irregularity (in
   % like the slider), "look real", standard handwriting, transparent background, shuffle. It starts

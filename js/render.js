@@ -706,8 +706,43 @@
         });
       });
     });
+    pages.forEach(function (pg) { keepInside(pg, penWidth(o), fit, o.paper, grid); });
     return { pages: pages, missing: Object.keys(ts.missing), fallbacks: ts.fallbacks, font: Object.keys(ts.fontChars),
              lines: lines.filter(function (l) { return !l.pagebreak; }).length, seed: o.seed };
+  }
+
+  // Nothing may stick out of the page (same rule as keep_inside in the Python skill): slant, tremor, pen
+  // pressure and the pen width can carry a stroke past a margin of 0 - it was cut off ("0" looked open).
+  // Move the writing in by the overhang and, for "fit to text", let the page grow. pg.inkBox = visible ink.
+  var EDGE_AIR = 0.5;
+  function keepInside(pg, pen, fit, paper, grid) {
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    pg.ink.concat(pg.marks).forEach(function (st) { st.forEach(function (p) {
+      if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+    }); });
+    if (x0 === Infinity) return;
+    var half = pen * Math.max(1, pg.inkW && pg.inkW.length ? Math.max.apply(null, pg.inkW) : 1) / 2;
+    x0 -= half; y0 -= half; x1 += half; y1 += half;
+    var shift = function (lo, hi, size) {
+      if (lo < EDGE_AIR) return EDGE_AIR - lo;
+      if (!fit && hi > size - EDGE_AIR) return -Math.min(hi - (size - EDGE_AIR), lo - EDGE_AIR);
+      return 0;
+    };
+    var dx = shift(x0, x1, pg.w), dy = shift(y0, y1, pg.h);
+    if (dx || dy) {
+      var mv = function (st) { return st.map(function (p) { return [p[0] + dx, p[1] + dy]; }); };
+      pg.ink = pg.ink.map(mv); pg.marks = pg.marks.map(mv);
+      pg.rules = pg.rules.map(function (r) { return [r[0] + dx, r[1] + dy, r[2] + dx, r[3] + dy]; });
+      x0 += dx; x1 += dx; y0 += dy; y1 += dy;
+    }
+    if (fit) { pg.w = Math.max(pg.w + dx, x1 + EDGE_AIR); pg.h = Math.max(pg.h + dy, y1 + EDGE_AIR); }
+    if (paper === 'grid' && (dx || dy || fit)) {
+      // rebuild the grid over the (new) page, still aligned with the shifted baselines
+      pg.rules = [];
+      for (var gx = ((dx % grid) + grid) % grid; gx <= pg.w + 1e-6; gx += grid) pg.rules.push([gx, 0, gx, pg.h]);
+      for (var gy = ((dy % grid) + grid) % grid; gy <= pg.h + 1e-6; gy += grid) pg.rules.push([0, gy, pg.w, gy]);
+    }
+    pg.inkBox = [x0, y0, x1, y1].map(function (v) { return Math.round(v * 100) / 100; });
   }
 
   /* ---------------- output ---------------- */

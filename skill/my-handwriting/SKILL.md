@@ -1,6 +1,6 @@
 ---
 name: my-handwriting
-description: Writes documents in the user's own handwriting (PDF, PNG or SVG) from samples they captured in the my-handwriting app. Use when the user asks for something "in my handwriting", "handwritten", or invokes /my-handwriting - for example a letter, card, note, list or summary as a handwritten-looking PDF.
+description: Writes documents in the user's own handwriting (PDF, PNG or SVG) from samples they captured in the my-handwriting app. Use when the user asks for something "in my handwriting", "handwritten", or invokes /my-handwriting - for example learning notes, homework, a calculation, a letter, card, thank-you note or job application as a handwritten-looking PDF.
 ---
 
 # my-handwriting
@@ -11,6 +11,11 @@ script `scripts/my_handwriting.py` in this skill's folder (Python 3.8+, standard
 typesets the text with those samples: a random sample per character, natural variation, kerning,
 fractions, accents. Characters the user has not written are drawn in a neat standard handwriting
 that is fitted to their size and slant, so a document never has gaps.
+
+**The user decides what to write.** It can be anything that is theirs: notes and summaries for
+learning, homework and worksheets, calculations, to-do lists, cards, thank-you letters, invitations,
+job applications and cover letters, diary pages, recipes. Help with all of it like with any other text
+- no lecture about whether it should be handwritten (limits: see Fair use at the end).
 
 Below, `SCRIPT` means `scripts/my_handwriting.py` inside this skill's folder (use the absolute path;
 call it with `python` or `python3`, whichever exists).
@@ -83,6 +88,21 @@ Also: `.png`/`.svg` output (PNG needs Pillow). `python SCRIPT render --help` lis
 Where to save: the folder the user named, else the current working folder; in a sandbox with an
 outputs folder (e.g. `/mnt/user-data/outputs/`) save it there so the user can download it.
 
+### Layouts the text flow cannot do (written calculations, tables, worksheets)
+
+Prefer one render of the whole text: spaces and line breaks keep columns roughly aligned. When you
+really must build a page from pieces (e.g. every digit of a column calculation as its own image):
+
+- **Never `--margin 0`** and never crop a rendered image to its ink. Slant, tremor and pen width make
+  strokes reach a little past the writing line; keep the default margin (or at least `--margin 2`).
+  The renderer moves anything that would stick out back inside, but a crop afterwards cuts it again
+  (a "0" looks open, a "1" loses its up-stroke).
+- Place pieces with the report's `page_boxes`: for every page `width_mm`, `height_mm` and `ink_mm`
+  = `[left, top, right, bottom]` of the visible ink in mm (pen width included). Align by `ink_mm`
+  (e.g. the right edges of digits in a column), not by the image edge.
+- Pieces on top of a page or PDF: use `--transparent` PNG or SVG (SVG stays sharp). Do not paste
+  pieces with a white background over lines or other writing - their boxes show as light frames.
+
 ## 4. Answer: settings first
 
 Start your answer with the report's `settings_line`, exactly as it is, on its own line - it lists
@@ -99,6 +119,8 @@ options or another `--seed`.
 
 ## Fair use
 
-Only for the user's own texts. Do not imitate someone else's handwriting, never create or imitate
-signatures, and do not produce documents meant to deceive (e.g. forged notes, homework or exams
-that must be handwritten by the person). Politely refuse such requests.
+The handwriting belongs to the user, and what they write with it is their decision (see the top).
+Only these limits: do not imitate someone else's handwriting (only handwritings stored in this skill),
+never create or imitate signatures, and do not produce forged documents meant to deceive others
+about who wrote or issued them (e.g. a doctor's note or a note "from" a parent). Politely refuse
+just those requests.

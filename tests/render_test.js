@@ -160,6 +160,24 @@ for (const bad of [{ size: 'abc' }, { variation: 'x' }, { margin: 'q', page: 'au
   const items = new R.Typesetter(multi, R.makeRng(1), { font: FONT }).charsToItems('xaby');
   ok(items.some(it => it[0] === 'g' && it[1] === 'ab'), 'multi-character key still found');
 }
+// nothing sticks out of the page: margin 0 with slant/tremor/pen width once cut off the left of "0" and "1"
+{
+  const inside = (pg, pen) => pg.ink.every(s => s.every(p => p[0] - pen / 2 >= 0.49 && p[1] - pen / 2 >= 0.49 &&
+    p[0] + pen / 2 <= pg.w - 0.49 && p[1] + pen / 2 <= pg.h - 0.49));
+  let moved = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const o = { page: 'auto', width: 30, margin: 0, size: 8, variation: 2, realism: true, seed, font: FONT, paper: seed % 2 ? 'lined' : 'grid' };
+    const pg = R.buildPages(String(seed % 10) + '01', gs, o).pages[0], pen = 8 * 0.075 * 1.25;
+    ok(inside(pg, pen), 'margin 0, seed ' + seed + ': ink inside the page');
+    ok(pg.inkBox && pg.inkBox[0] >= 0.49 && pg.inkBox[2] <= pg.w, 'ink box seed ' + seed);
+    if (pg.w > 30) moved++;
+  }
+  ok(moved > 0, 'margin 0: the page grew for overhanging ink (' + moved + ' of 40)');
+  const a4 = R.buildPages('0'.repeat(60), gs, { page: 'a4', margin: 0, size: 8, variation: 2, realism: true, seed: 3, font: FONT }).pages[0];
+  ok(a4.w === 210 && inside(a4, 0.75), 'A4 with margin 0: page size kept, ink moved inside');
+  const normal = R.buildPages('Hallo', gs, { page: 'a4', seed: 1, font: FONT }).pages[0];
+  ok(normal.inkBox[0] > 15, 'normal margins: nothing moved');
+}
 R.toPDFBlob(long.pages, { color: 'black' }).then(blob => blob.arrayBuffer()).then(ab => {
   const buf = Buffer.from(ab);
   checkPdf(buf, 'pdf-z');

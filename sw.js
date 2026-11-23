@@ -1,7 +1,7 @@
 /* my-handwriting - service worker: makes the app work offline after the first visit (only over http/https,
  * e.g. GitHub Pages). Network first, so a new version is used as soon as it is online; the cache is the
  * fallback when offline. Bump VERSION when files are added. */
-var VERSION = 'my-handwriting-v1.5.1';
+var VERSION = 'my-handwriting-v1.6.0';
 var FILES = ['./', 'index.html', 'css/app.css', 'js/i18n.js', 'js/lang/en.js', 'js/lang/de.js', 'js/lang/fr.js', 'js/lang/es.js',
              'js/lang/it.js', 'js/lang/pl.js', 'js/charsets.js', 'js/fallback-font.js', 'js/render.js', 'js/zip.js', 'js/ui-select.js', 'js/skill-bundle.js', 'js/app.js', 'icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png',
              'manifest.webmanifest'];

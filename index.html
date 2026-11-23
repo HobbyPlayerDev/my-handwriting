@@ -223,7 +223,6 @@
   <h2 data-i18n="set.title"></h2>
   <section class="set-group">
     <h3 data-i18n="set.handwritings"></h3>
-    <div class="small" data-i18n="prof.hint"></div>
     <div class="profiles" id="setProfiles"></div>
   </section>
   <section class="set-group">
@@ -231,18 +230,18 @@
     <label class="f" for="setLang" data-i18n="set.lang"></label>
     <select id="setLang"></select>
     <label class="f" for="setTarget" data-i18n="set.target"></label>
-    <input type="number" id="setTarget" min="1" max="50" step="1"> <span class="small" data-i18n="set.targetHint"></span>
+    <input type="number" id="setTarget" min="1" max="50" step="1">
     <label class="f" data-i18n="set.scripts"></label>
     <div class="scripts" id="setScripts"></div>
-    <div class="small" data-i18n="set.scriptsHint"></div>
     <label class="f" for="setMode" data-i18n="set.mode"></label>
     <select id="setMode"><option value="char" data-i18n="set.modeChar"></option><option value="round" data-i18n="set.modeRound"></option></select>
     <label class="f" for="setCustom" data-i18n="set.custom"></label>
     <input type="text" id="setCustom" data-i18n-ph="set.customPh">
-    <div class="small" data-i18n="set.customHint"></div>
   </section>
   <section class="set-group">
     <h3 data-i18n="set.input"></h3>
+    <div class="range-row"><span data-i18n="set.padSize"></span> <input type="range" id="setPadSize" min="10" max="160" step="10"> <span id="setPadSizeVal" class="small"></span></div>
+    <div class="range-row"><span data-i18n="set.padLine"></span> <input type="range" id="setPadLine" min="25" max="300" step="25"> <span id="setPadLineVal" class="small"></span></div>
     <label class="check"><input type="checkbox" id="setTemplate"> <span data-i18n="set.templateOn"></span></label>
     <div class="range-row"><span data-i18n="set.templateAlpha"></span> <input type="range" id="setAlpha" min="0.04" max="0.4" step="0.01"> <span id="setAlphaVal" class="small"></span></div>
     <label class="f" for="setPen" data-i18n="set.pen"></label>
@@ -250,7 +249,6 @@
   </section>
   <section class="set-group">
     <h3 data-i18n="set.docs"></h3>
-    <div class="small" data-i18n="set.docsHint"></div>
     <div class="fields">
       <label><span data-i18n="write.paper"></span><select id="setClaudePaper"></select></label>
       <label><span data-i18n="write.size"></span><select id="setClaudeSize"></select></label>
@@ -259,19 +257,16 @@
       <label><span data-i18n="write.align"></span><select id="setClaudeAlign"></select></label>
       <label><span><span data-i18n="write.variation"></span> <b class="rv"></b></span><input type="range" id="setClaudeVar" min="0" max="2" step="0.1"></label>
     </div>
-    <label class="check"><input type="checkbox" id="setRealism"> <span data-i18n="set.realismOn"></span></label>
-    <div class="small" data-i18n="set.realismHint"></div>
-    <label class="check"><input type="checkbox" id="setFallback"> <span data-i18n="set.fallbackOn"></span></label>
-    <div class="small" data-i18n="set.fallbackHint"></div>
+    <label class="check" data-i18n-title="set.realismHint"><input type="checkbox" id="setRealism"> <span data-i18n="set.realismOn"></span></label>
+    <label class="check" data-i18n-title="set.fallbackHint"><input type="checkbox" id="setFallback"> <span data-i18n="set.fallbackOn"></span></label>
   </section>
   <section class="set-group">
     <h3 data-i18n="set.storage"></h3>
     <div class="small" id="storageInfo"></div>
-    <div class="row tight wrap gap-top">
+    <div class="danger-row">
       <button type="button" id="btnWipe" class="danger" data-i18n="set.wipe"></button>
       <button type="button" id="btnReset" class="danger" data-i18n="set.reset"></button>
     </div>
-    <div class="small" data-i18n="set.resetHint"></div>
   </section>
   <div class="row sticky-row">
     <span class="spacer"></span>

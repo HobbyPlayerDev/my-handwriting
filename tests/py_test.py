@@ -144,6 +144,33 @@ code, out, err = run("render", "--glyphs", cpath, "--text", "Hi", "--out", os.pa
 ok(code == 0 and out.splitlines()[0] == "Einstellungen: Größe: 8 mm · Papier: Kariert · Format: Passend zum Text · Farbe: Rot · "
    "Ausrichtung: Rechts · Unregelmäßigkeit: 80 % · Echt wirken lassen: aus · Fehlende Zeichen ergänzen: aus · Transparenter Hintergrund: an",
    "settings line first, with the changes from the chat: %s" % out.splitlines()[:1])
+# nothing is cut off at the edge: --margin 0 (Claude placing single digits) once cut the left of "0" and "1"
+grown = 0
+for seed in range(1, 31):
+    code, out, err = run("render", "--glyphs", fx, "--text", str(seed % 10) + "01", "--page", "auto", "--width", "30",
+                         "--margin", "0", "--size", "8", "--irregularity", "100", "--realism", "--seed", str(seed),
+                         "--paper", "grid" if seed % 2 else "lined", "--out", os.path.join(tmp, "m0.svg"), "--json")
+    box = json.loads(out)["page_boxes"][0] if code == 0 else {}
+    ink = box.get("ink_mm") or [-1, -1, 99, 99]
+    ok(ink[0] >= 0.49 and ink[1] >= 0.49 and ink[2] <= box["width_mm"] - 0.49 and ink[3] <= box["height_mm"] - 0.49,
+       "margin 0, seed %d: ink inside the page %s" % (seed, box))
+    grown += box.get("width_mm", 0) > 30
+ok(grown > 0, "margin 0: the page grew for overhanging ink (%d of 30)" % grown)
+pg = hs.Page(30, 20)
+pg.ink = [[(-1.0, 5.0), (3.0, 5.0)]]
+pg.rules = [(0, 10, 30, 10, "line")]
+hs.keep_inside(pg, 0.6, True, "lined", 5.0)
+ok(abs(pg.ink[0][0][0] - 0.8) < 1e-9 and pg.rules[0][0] == 1.8 and pg.w == 31.8, "keep_inside moves ink and lines, grows the page: %s %s" % (pg.ink, pg.w))
+try:
+    from PIL import Image
+    code, out, err = run("render", "--glyphs", fx, "--text", "10101", "--page", "auto", "--paper", "blank", "--transparent",
+                         "--color", "black", "--out", os.path.join(tmp, "halo.png"))
+    im = Image.open(os.path.join(tmp, "halo.png")).convert("RGBA")
+    soft = [p for p in im.getdata() if 0 < p[3] < 255]
+    ok(code == 0 and soft and max(max(p[:3]) for p in soft) < 40,
+       "transparent PNG: soft edges keep the ink colour (no light rim), %d edge pixels" % len(soft))
+except ImportError:
+    print("note: Pillow not installed, PNG edge test skipped")
 code, out, err = run("render", "--glyphs", cpath, "--text", "Hi", "--out", os.path.join(tmp, "c4.pdf"), "--irregularity", "150")
 ok(code != 0 and "irregularity" in err, "--irregularity above 100 is refused")
 code, out, err = run("render", "--glyphs", fx, "--text", "Hi", "--out", os.path.join(tmp, "c5.pdf"), "--json")

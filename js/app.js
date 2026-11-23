@@ -7,7 +7,7 @@
   /* ------------------------------------------------------------------ *
    *  Constants – must match the Python renderer (data format version 1) *
    * ------------------------------------------------------------------ */
-  var APP_VERSION = '1.5.1';
+  var APP_VERSION = '1.6.0';
   var FORMAT = 'my-handwriting-glyphs';
   var LEGACY_FORMATS = ['handschrift-glyphs'];   // files from before the project was renamed
   var FORMAT_VERSION = 1;
@@ -21,6 +21,8 @@
   var BASE_GROUPS = ['upper', 'lower', 'digits', 'punct', 'math', 'special'];
   var PAPERS = ['blank', 'lined', 'grid'], SIZES = [3.5, 4, 5, 6, 8, 10, 14, 20], COLORS = ['blue', 'royal', 'black', 'pencil', 'red', 'green'];
   var PAGES = ['a4', 'a5', 'letter'], ALIGNS = ['left', 'center', 'right'];
+  var PAD_KEY = 'my-handwriting-padsize';     // device setting: size of the writing area in % (100 = fits the screen)
+  var LINE_KEY = 'my-handwriting-padline';    // device setting: line width while writing in % (100 = normal)
   var PEN_KEY = 'my-handwriting-pen';         // device setting: a pen was used here before (palm rejection from the start)
 
   /* ------------------------------ state ------------------------------ */
@@ -486,6 +488,15 @@
   /* ------------------------------ writing area ------------------------------ */
   var pad = $('pad'), ctx = pad.getContext('2d');
   var padCssW = 0, padU = 0, padDpr = 0;
+  var PAD_MIN = 10, PAD_MAX = 160;
+  var padScale = (function () { try { var v = parseInt(localStorage.getItem(PAD_KEY), 10); return v >= PAD_MIN && v <= PAD_MAX ? v : 100; } catch (e) { return 100; } })();
+  var padPreview = null;   // slider in the settings, not saved yet
+  // line width on the writing area only (what you see while writing - the samples and the documents
+  // are not changed by it): thinner for a big area, thicker for a small one or a thick pen feeling
+  var LINE_MIN = 25, LINE_MAX = 300;
+  var padLine = (function () { try { var v = parseInt(localStorage.getItem(LINE_KEY), 10); return v >= LINE_MIN && v <= LINE_MAX ? v : 100; } catch (e) { return 100; } })();
+  var padLinePreview = null;
+  function padLineK() { return (padLinePreview !== null ? padLinePreview : padLine) / 100; }
 
   function resizePad(force) {
     // As big as possible, but the buttons should stay visible without scrolling
@@ -493,8 +504,11 @@
     var availW = Math.max(240, (main.clientWidth || 640) - 28);
     var headerH = document.querySelector('header').offsetHeight || 56;
     var availH = Math.max(230, window.innerHeight - headerH - 270);
-    var w = Math.floor(Math.min(820, availW, availH * M.boxWidth / BOX_H));
-    w = Math.max(220, Math.min(w, availW));
+    // 100 % = as big as fits; smaller for small letters, bigger (up to the full width, then the page
+    // scrolls) for big letters on a large screen - a setting of this device (localStorage)
+    var pct = padPreview !== null ? padPreview : padScale;
+    var w = Math.floor(Math.min(820, availW, availH * M.boxWidth / BOX_H) * pct / 100);
+    w = Math.max(Math.min(40, availW), Math.min(w, availW));
     var dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
     if (!force && w === padCssW && dpr === padDpr) return;
     if (activePointer !== null) return;            // never rebuild the area in the middle of a stroke
@@ -508,6 +522,32 @@
     redrawPad();
   }
   function toPx(x, y, u) { return [x * u, (M.boxTop - y) * u]; }
+
+  // Ctrl + mouse wheel (or a touchpad pinch, which browsers send the same way) on the writing side of
+  // the page: size in steps of 10 %, saved for this device like the slider in the settings. Not only over
+  // the area itself: it shrinks away from the mouse, and the next turn of the wheel then zoomed the whole
+  // page in Chrome instead. The header, the overview and open dialogs keep the browser's own zoom.
+  function setPadScale(v) {
+    padScale = clamp(Math.round(v / 10) * 10, PAD_MIN, PAD_MAX); padPreview = null;
+    try { if (padScale === 100) localStorage.removeItem(PAD_KEY); else localStorage.setItem(PAD_KEY, String(padScale)); } catch (e) {}
+    resizePad(true);
+  }
+  var wheelSum = 0, wheelTimer = null;
+  function onWritingSide(el) {
+    if (!el || !el.closest || modalOpen()) return false;
+    if (el.closest('header, #overview, .modal-bg, #toast')) return false;
+    return !!el.closest('main, .layout') || el === document.body || el === document.documentElement;
+  }
+  window.addEventListener('wheel', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || activePointer !== null || !onWritingSide(e.target)) return;   // Ctrl, ⌘ (Mac)
+    e.preventDefault();                               // instead of zooming the whole page
+    wheelSum += e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+    clearTimeout(wheelTimer); wheelTimer = setTimeout(function () { wheelSum = 0; }, 400);
+    if (Math.abs(wheelSum) < 50) return;               // one notch of a mouse wheel = 100
+    var step = wheelSum < 0 ? 10 : -10; wheelSum = 0;
+    var before = padScale; setPadScale(padScale + step);
+    if (padScale !== before) toast(t('pad.sizeToast', { n: padScale }));
+  }, { passive: false });
 
   function drawGuides(c, u, w, small) {
     c.save();
@@ -523,8 +563,14 @@
     line(M.baseline, '#7d89b8', small ? 1 : 1.6);
     line(M.descender, '#dfe2ee', 1, [2, 4]);
     c.setLineDash([]);
-    if (!small) {
-      c.fillStyle = '#a3a9bb'; c.font = '11px system-ui, sans-serif'; c.textAlign = 'right';
+    // line names on the right - only where they fit between the guide letter in the middle (a wide
+    // one like W is about 0.9 units) and the edge; a small writing area (e.g. 10 %) had them right
+    // across the letter
+    c.font = '11px system-ui, sans-serif';
+    var names = [t('guide.cap'), t('guide.x'), t('guide.base'), t('guide.desc')];
+    var longest = Math.max.apply(null, names.map(function (s) { return c.measureText(s).width; }));
+    if (!small && w / 2 - 0.45 * u >= longest + 20) {
+      c.fillStyle = '#a3a9bb'; c.textAlign = 'right';
       c.fillText(t('guide.cap'), w - 8, toPx(0, M.cap, u)[1] - 4);
       c.fillText(t('guide.x'), w - 8, toPx(0, M.xheight, u)[1] - 4);
       c.fillText(t('guide.base'), w - 8, toPx(0, M.baseline, u)[1] - 4);
@@ -577,14 +623,19 @@
     c.lineTo(l[0] + ox, l[1] + oy);
     c.stroke();
   }
-  function inkStyle(c, u) { c.strokeStyle = '#1f2f86'; c.lineWidth = Math.max(1.2, PEN * u); c.lineCap = 'round'; c.lineJoin = 'round'; }
+  function inkStyle(c, u, k) { c.strokeStyle = '#1f2f86'; c.lineWidth = Math.max(0.6, Math.max(1.2, PEN * u) * (k || 1)); c.lineCap = 'round'; c.lineJoin = 'round'; }
   function redrawPad() {
     var h = padCssW * BOX_H / M.boxWidth;
     ctx.clearRect(0, 0, padCssW, h);
     drawGuides(ctx, padU, padCssW, false);
     drawTemplate(ctx, padU, padCssW);
-    inkStyle(ctx, padU);
+    inkStyle(ctx, padU, padLineK());
     drawing.forEach(function (st) { strokePath(ctx, st, padU); });
+    // while the line width slider moves and nothing is written yet: a sample line to see the width
+    if (padLinePreview !== null && !drawing.length) {
+      var demo = []; for (var di = 0; di <= 40; di++) demo.push([0.35 + di * 0.0375, 0.3 + 0.18 * Math.sin(di / 40 * Math.PI * 3)]);
+      strokePath(ctx, demo, padU);
+    }
     updateButtons();
   }
   function eventToUnits(e) {
@@ -602,7 +653,7 @@
     var d = Math.hypot(p[0] - last[0], p[1] - last[1]);
     if (d < (force ? 0.0008 : MIN_DIST)) return;
     st.push(p);
-    inkStyle(ctx, padU);
+    inkStyle(ctx, padU, padLineK());
     var a = toPx(last[0], last[1], padU), b = toPx(p[0], p[1], padU);
     ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
   }
@@ -661,7 +712,7 @@
     pad.classList.toggle('erasing', erasing);
     if (erasing) { eraseAt(p); return; }
     drawing.push([p]);
-    inkStyle(ctx, padU);
+    inkStyle(ctx, padU, padLineK());
     var px = toPx(p[0], p[1], padU);
     ctx.beginPath(); ctx.arc(px[0], px[1], ctx.lineWidth / 2, 0, Math.PI * 2); ctx.fillStyle = ctx.strokeStyle; ctx.fill();
     updateButtons();
@@ -957,6 +1008,8 @@
     var bg = $(id); bg.classList.remove('show'); bg.classList.add('hiding');
     setTimeout(function () { if (!bg.classList.contains('show')) bg.classList.remove('hiding'); }, 230);
     if (id === 'mWizard') finishWizard(false);
+    if (id === 'mSettings' && padPreview !== null) { padPreview = null; resizePad(true); }   // closed without Save
+    if (id === 'mSettings' && padLinePreview !== null) { padLinePreview = null; redrawPad(); }
     if (fromHistory) return;
     // a following dialog may open in the same step (settings -> setup helper): decide afterwards
     setTimeout(function () {
@@ -1448,6 +1501,8 @@
     $('setTarget').value = target(); $('setMode').value = state.settings.mode; $('setPen').value = state.settings.penOnly;
     $('setCustom').value = state.settings.custom || '';
     $('setTemplate').checked = templateOn(); $('setAlpha').value = String(state.settings.templateAlpha); showAlpha();
+    $('setPadSize').value = String(padScale); showPadSize();
+    $('setPadLine').value = String(padLine); showPadLine();
     renderProfiles();
     var c = state.settings.claude;
     $('setClaudePaper').innerHTML = options(PAPERS, function (v) { return t('paper.' + v); }, c.paper);
@@ -1470,6 +1525,17 @@
     openModal('mSettings');
   }
   $('setClaudeVar').addEventListener('input', function () { showVar(this); });
+  function showPadSize() { $('setPadSizeVal').textContent = $('setPadSize').value + ' %'; }
+  $('setPadSize').addEventListener('input', function () {
+    showPadSize();
+    // live: the writing area behind the dialog changes at once; kept only with Save
+    padPreview = clamp(parseInt(this.value, 10) || 100, PAD_MIN, PAD_MAX); resizePad(true);
+  });
+  function showPadLine() { $('setPadLineVal').textContent = $('setPadLine').value + ' %'; }
+  $('setPadLine').addEventListener('input', function () {
+    showPadLine();
+    padLinePreview = clamp(parseInt(this.value, 10) || 100, LINE_MIN, LINE_MAX); redrawPad();   // live, kept only with Save
+  });
   function showAlpha() { $('setAlphaVal').textContent = Math.round(parseFloat($('setAlpha').value) * 100) + ' %'; }
   $('setAlpha').addEventListener('input', function () {
     showAlpha();
@@ -1483,6 +1549,10 @@
     state.settings.custom = nfc($('setCustom').value || '');
     state.settings.template = $('setTemplate').checked;
     state.settings.templateAlpha = clamp(parseFloat($('setAlpha').value) || 0.15, 0.03, 0.6);
+    setPadScale(parseInt($('setPadSize').value, 10) || 100);
+    padLine = clamp(Math.round((parseInt($('setPadLine').value, 10) || 100) / 25) * 25, LINE_MIN, LINE_MAX); padLinePreview = null;
+    try { if (padLine === 100) localStorage.removeItem(LINE_KEY); else localStorage.setItem(LINE_KEY, String(padLine)); } catch (e) {}
+    redrawPad();
     var sc = [];
     $('setScripts').querySelectorAll('[data-script]').forEach(function (cb) { if (cb.checked) sc.push(cb.getAttribute('data-script')); });
     state.settings.scripts = sc;

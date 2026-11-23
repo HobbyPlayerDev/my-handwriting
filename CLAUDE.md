@@ -104,7 +104,7 @@ tests/                     i18n_test.js, render_test.js, py_test.py, make_fixtur
 IndexedDB `my-handwriting` / store `kv`: `profiles` = JSON `{active, list: [{id, name, created, samples}]}`,
 `state:<id>` = JSON `{savedAt, state}` per handwriting; localStorage keeps a copy of both
 (`my-handwriting-profiles`, `my-handwriting-state:<id>`). Device settings outside: `my-handwriting-lang`
-(interface language), `my-handwriting-pen`. Upgrades: no `profiles` yet → the single `state` key of 1.0
+(interface language), `my-handwriting-pen`, `my-handwriting-padsize` (writing area 10-160 %, missing = 100), `my-handwriting-padline` (line width on the writing area 25-300 %). Upgrades: no `profiles` yet → the single `state` key of 1.0
 (or the old name `handschrift-erfassung`) becomes handwriting 1; old keys are left untouched.
 Default names ("Handwriting 2") follow the interface language (`defaultNumber`). Delete and "reset
 everything" keep the removed data in memory for the undo toast until the page is closed.
@@ -116,7 +116,7 @@ auto|on|off, custom, groups {id: false = off}, scripts [codes], template, templa
 realism (default true; exported as `claude.realism`),
 claude {paper, size, color, page, align, variation 0-2 (shown as % = ×50); old files: lang - unused}, write {size, paper, page, color, align, variation, transparent,
 text, markdown}}, `meta` {wizardDone, introSeen, lastExport, samplesAtExport, current, persistAsked,
-claudeSet, migrated}. Device setting outside the state: `localStorage['my-handwriting-pen']`.
+claudeSet, migrated}. Device settings outside the state: `localStorage['my-handwriting-pen']`, `['my-handwriting-padsize']`, `['my-handwriting-padline']`.
 
 ### Groups
 Order: upper, lower, `lang-<code>` (selected languages), digits, punct, math, special, custom. A
@@ -201,8 +201,41 @@ come from: command line > `settings.claude` of the exported file > `CLAUDE_DEFAU
     it `unreadable` and `saveNow` refuses to write it until reload. Test: delete `state:<id>` in IDB +
     localStorage, reload → toast `toast.loadFail`, nothing written; put the copies back.
 28. `buildPages` sanitises size/variation/margin/width: NaN from an edited file became NaN coordinates.
+29. Ink can reach past the writing line (slant, tremor, realShape, pen width): with `--margin 0` (Claude
+    rendering single digits for a column calculation) the writers cut it off - "0" open, "1" without its
+    up-stroke. `keepInside` / `keep_inside` after building the pages moves ink + marks + lines inside
+    (0.5 mm air incl. half the widest pen), lets "fit to text" pages grow, rebuilds the grid; the report
+    gives `page_boxes` (page size + `ink_mm`) so Claude aligns pieces by ink, never by the image edge.
+30. Transparent PNG (Python): `img.paste(colour, mask)` on a transparent white canvas mixed white into the
+    soft edge pixels → a light rim around every letter once placed on paper/into a PDF. Composite with
+    `Image.alpha_composite` (colour layer, alpha = mask). The app's canvas was never affected.
+31. Writing area size: `padScale` (localStorage, this device, 10-160 %) scales the automatic size; the
+    slider shows it live through `padPreview`, `closeModal('mSettings')` without Save resets it. Ctrl +
+    wheel anywhere on the writing side (`window` listener, passive: false; not over header, overview,
+    dialogs - the area shrinks away from the mouse, and on `#padwrap` alone the next turn zoomed the
+    whole page in Chrome; wheel deltas summed to one notch = 100, line mode × 33) calls
+    `setPadScale` in 10 % steps; a plain wheel is never intercepted. The prompt, keys, samples and banner
+    keep `max(var(--padw), 360px)` so they stay readable next to a tiny writing area. On a small area the
+    line names ("top line" …) ran across the letter: `drawGuides` draws them only if the longest name
+    + 20 px fits between a wide guide letter (0.45 units from the middle) and the edge - measured, so
+    long words (Polish) drop out earlier; the save tick is at most 40 % of the area. ⌘ + wheel works too. Samples are stored in
+    box units, so every size gives the same sample (tested 70 % vs 160 %: identical numbers).
+32. A PNG page takes ~1 s to encode in a slow (background) preview: ui_audit waits for the download (up
+    to 8 s) instead of a fixed 1.5 s. (A pen choice - ballpoint, fountain pen, brush … - was built and taken
+    out again before 1.6.0 at the owner's wish; small differences in line width are invisible on the page
+    preview anyway, ~3.4 px/mm.)
+33. Settings: no grey explanation lines any more (the hints of realism/fallback stay as tooltips and in
+    the setup); the red buttons sit in `.danger-row` (two equal grid columns, text wraps inside) - in a
+    flex row the longer "press again" text pushed the other button into the next line.
+34. Line width while writing (`padLine`, 25-300 %, this device): only `inkStyle(ctx, padU, padLineK())` on
+    the writing area (redraw, new points, the first dot) - thumbnails, samples and documents are unchanged.
+    The slider previews through `padLinePreview` (a sample wave when the area is empty), reset by
+    `closeModal('mSettings')` without Save.
 
 ## Status and next steps
+1.6.0 (2026-11-23): nothing cut off at the edge (29, `page_boxes`), no light rim in transparent PNGs (30),
+writing area size 10-160 % + Ctrl + wheel (31), line width while writing 25-300 % (34), tidier settings (33), SKILL.md: the user decides what to write (homework, applications …),
+how to build calculations/worksheets from pieces.
 1.5.1 (2026-11-20): Claude sets everything the app can and lists its settings first (`settings_line`,
 `--irregularity`), alignment + irregularity in the document defaults, kerning fix for straight
 strokes, skill name /my-handwriting in app + README, LICENSE in the skill ZIP, 192 px icon (Chrome install).
@@ -220,5 +253,5 @@ time, start-fail message, PNG icons, README screenshot, Claude trademark note.
 everything, "Use in Claude" (skill ZIP built in the browser + copy-paste messages), `--profile`.
 1.0.0 (2026-11-17): 6 languages, wizard with Claude settings, standard handwriting, Markdown, skill
 install/package/info, pen hover/palm handling, own characters in the overview.
-Published 2026-11-21: GitHub (public) + Pages + release v1.5.1. Open: real devices (pen laptop with S Pen,
-iPad + Pencil, Android), Safari storage (7-day rule). Ideas: docs/CONCEPT.md → "Ideas for later".
+Published 2026-11-21: GitHub (public) + Pages + release v1.5.1. Real Android phone, iPhone and iPad tested by the
+owner (2026-11-23, everything works). Open: pen laptop with S Pen, Safari storage (7-day rule). Ideas: docs/CONCEPT.md → "Ideas for later".

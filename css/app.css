@@ -55,6 +55,9 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 button.primary{background:var(--accent);color:var(--on-accent)}
 button.primary:hover:not(:disabled){background:var(--accent-h)}
 button.danger{color:var(--bad);background:var(--bad-soft)}
+/* the two red buttons: same size side by side, the longer "press again" text wraps inside instead of pushing */
+.danger-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.danger-row button{width:100%;min-width:0;white-space:normal;line-height:1.25;font-size:13.5px;padding:8px 10px;text-align:center}
 button.plain{background:transparent;color:var(--accent)}
 button.plain:hover:not(:disabled){background:var(--accent-soft)}
 button.toggle.on{background:var(--accent-soft);color:var(--accent)}
@@ -112,7 +115,7 @@ aside{border-left:1px solid var(--line);background:var(--card);padding:6px 16px 
 aside h2{font-size:20px;margin:12px 0 2px;font-weight:700;letter-spacing:-.01em}
 @media (max-width: 1000px){ .layout{grid-template-columns:1fr} aside{border-left:0;border-top:1px solid var(--line);max-height:none;position:static} }
 
-.prompt{display:flex;align-items:center;gap:14px;width:100%;max-width:var(--padw,820px)}
+.prompt{display:flex;align-items:center;gap:14px;width:100%;max-width:max(var(--padw,820px),360px)}
 .target{font-family:"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;font-size:52px;line-height:1;min-width:80px;height:80px;padding:0 8px;display:flex;align-items:center;justify-content:center;
   background:var(--card);border-radius:var(--r-lg);box-shadow:var(--shadow);color:var(--text)}
 .pinfo{flex:1;min-width:0}
@@ -131,12 +134,12 @@ canvas#pad.erasing{cursor:cell}
 .seg button{background:transparent;min-height:calc(var(--tap) - 4px)}
 .seg button:hover:not(:disabled){background:var(--card)}
 button.save{padding-left:20px;padding-right:22px;font-weight:600}
-.keys{font-size:12px;color:var(--muted);width:100%;max-width:var(--padw,820px);text-align:center}
+.keys{font-size:12px;color:var(--muted);width:100%;max-width:max(var(--padw,820px),360px);text-align:center}
 .touch-ui .keys{display:none}
 kbd{font-size:11px;border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:0 5px;background:var(--card);font-family:inherit}
 code{background:var(--fill);border-radius:5px;padding:1px 5px;font-size:.92em}
 
-.samples{width:100%;max-width:var(--padw,820px);display:flex;gap:8px;flex-wrap:wrap}
+.samples{width:100%;max-width:max(var(--padw,820px),360px);display:flex;gap:8px;flex-wrap:wrap}
 .samples .empty{font-size:13px;color:var(--muted)}
 .thumb{position:relative;background:var(--paper);border-radius:12px;box-shadow:var(--shadow);border:1px solid var(--line)}
 .thumb.new{animation:thumbIn .45s cubic-bezier(.2,.9,.3,1.3)}
@@ -148,7 +151,7 @@ code{background:var(--fill);border-radius:5px;padding:1px 5px;font-size:.92em}
 .thumb.suspect{border-color:var(--warn);box-shadow:0 0 0 1px var(--warn) inset}
 .thumb.suspect .no{color:var(--warn);font-weight:700}
 
-.banner{width:100%;max-width:var(--padw,820px);padding:10px 12px 10px 14px;border-radius:var(--r);background:var(--warn-soft);font-size:13.5px;display:none;align-items:center;gap:10px;flex-wrap:wrap}
+.banner{width:100%;max-width:max(var(--padw,820px),360px);padding:10px 12px 10px 14px;border-radius:var(--r);background:var(--warn-soft);font-size:13.5px;display:none;align-items:center;gap:10px;flex-wrap:wrap}
 .banner>.ic{color:var(--warn)}
 .banner.ok{background:var(--ok-soft)}
 .banner.ok>.ic{color:var(--ok)}
@@ -391,9 +394,9 @@ label.check input{width:20px;height:20px;flex:none}
 .dots i.pop{animation:dotPop .45s cubic-bezier(.2,.8,.2,1)}
 .cell.bump{animation:bump .5s cubic-bezier(.2,.8,.2,1)}
 .cell{transition:background-color .25s,box-shadow .2s}
-.pad-ok{position:absolute;left:50%;top:50%;width:72px;height:72px;border-radius:50%;background:var(--ok);color:#fff;display:flex;align-items:center;justify-content:center;
+.pad-ok{position:absolute;left:50%;top:50%;width:min(72px,calc(var(--padw,820px)*.4));height:min(72px,calc(var(--padw,820px)*.4));border-radius:50%;background:var(--ok);color:#fff;display:flex;align-items:center;justify-content:center;
   opacity:0;pointer-events:none;transform:translate(-50%,-50%);box-shadow:0 8px 24px rgba(36,138,61,.35)}
-.pad-ok .ic{width:38px;height:38px;stroke-width:2.6}
+.pad-ok .ic{width:52%;height:52%;stroke-width:2.6}
 .pad-ok.show{animation:okPop .7s cubic-bezier(.2,.8,.2,1)}
 .padwrap.saved{animation:padFlash .6s ease-out}
 #wizBody.step-next{animation:slideIn .3s cubic-bezier(.2,.8,.2,1)}

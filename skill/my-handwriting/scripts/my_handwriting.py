@@ -43,7 +43,7 @@ import sys
 import unicodedata
 import zlib
 
-VERSION = "1.5.1"
+VERSION = "1.6.0"
 FORMAT = "my-handwriting-glyphs"
 LEGACY_FORMATS = ("handschrift-glyphs",)       # name of the format before the project was renamed
 SUPPORTED_FORMAT_VERSIONS = (1,)
@@ -1104,6 +1104,11 @@ class Page:
         self.ink_w = None   # width factor per ink stroke (pen pressure, realism option)
         self.marks = []     # red marks (missing characters)
         self.rules = []     # paper lines: (x0, y0, x1, y1, kind)
+        self.ink_box = None  # visible ink (pen width included) in mm: (x0, y0, x1, y1), set by keep_inside
+
+
+EDGE_AIR = 0.5  # mm between the ink and the page edge - nothing is ever cut off (keep_inside)
+
 
 
 def parse_color(c):
@@ -1238,7 +1243,58 @@ def build_pages(text, gs, opt):
                 for st in b.ink:
                     add_ink(pg, tf(st, x, h))
                 pg.marks += [tf(st, x, h) for st in b.marks]
+    pen = opt.pen if getattr(opt, "pen", None) else max(0.25, size * 0.075)
+    for pg in pages:
+        keep_inside(pg, pen, fit, opt.paper, grid)
     return pages, ts, sum(1 for ln in lines if not ln.pagebreak)
+
+
+def keep_inside(pg, pen, fit, paper, grid):
+    """Nothing may stick out of the page. Slant, tremor, pen pressure and the pen width can carry a
+    stroke past a margin of 0 (e.g. --margin 0 for single digits) - the writers would cut it off and an
+    "0" looked open. Move the writing in by the overhang and, for "fit to text", let the page grow.
+    Stores the visible ink box (with the pen width) in pg.ink_box for the JSON report."""
+    pts = [p for st in pg.ink + pg.marks for p in st]
+    if not pts:
+        return
+    wmax = max(pg.ink_w) if pg.ink_w else 1.0
+    half = pen * max(1.0, wmax) / 2.0      # the widest pen stroke reaches this far past its centre line
+    x0 = min(p[0] for p in pts) - half
+    y0 = min(p[1] for p in pts) - half
+    x1 = max(p[0] for p in pts) + half
+    y1 = max(p[1] for p in pts) + half
+    def shift(lo, hi, size):
+        # keep EDGE_AIR between the ink and the edge; a fixed page cannot grow, so there the writing
+        # may also move back from the far edge, as far as the near edge allows
+        if lo < EDGE_AIR:
+            return EDGE_AIR - lo
+        if not fit and hi > size - EDGE_AIR:
+            return -min(hi - (size - EDGE_AIR), lo - EDGE_AIR)
+        return 0.0
+    dx = shift(x0, x1, pg.w)
+    dy = shift(y0, y1, pg.h)
+    if dx or dy:
+        def mv(st):
+            return [(x + dx, y + dy) for x, y in st]
+        pg.ink = [mv(st) for st in pg.ink]
+        pg.marks = [mv(st) for st in pg.marks]
+        pg.rules = [(a + dx, b + dy, c + dx, e + dy, k) for a, b, c, e, k in pg.rules]
+        x0, x1, y0, y1 = x0 + dx, x1 + dx, y0 + dy, y1 + dy
+    if fit:
+        pg.w = max(pg.w + dx, x1 + EDGE_AIR)
+        pg.h = max(pg.h + dy, y1 + EDGE_AIR)
+    if paper == "grid" and (dx or dy or fit):
+        # rebuild the grid over the (new) page, still aligned with the shifted baselines
+        pg.rules = [r for r in pg.rules if r[4] != "grid"]
+        x = dx % grid
+        while x <= pg.w + 1e-6:
+            pg.rules.append((x, 0, x, pg.h, "grid"))
+            x += grid
+        y = dy % grid
+        while y <= pg.h + 1e-6:
+            pg.rules.append((0, y, pg.w, y, "grid"))
+            y += grid
+    pg.ink_box = (round(x0, 2), round(y0, 2), round(x1, 2), round(y1, 2))
 
 
 def add_paper(pg, opt, first, line_h, ml, mr, grid):
@@ -1463,20 +1519,25 @@ def write_png(path, pages, color, pen, transparent=False, dpi=200):
             return mask.resize((W, H), Image.LANCZOS)
 
         if transparent:
-            img = Image.new("RGBA", (W, H), (255, 255, 255, 0))
+            img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         else:
             img = Image.new("RGBA", (W, H), (255, 255, 255, 255))
+
+        def put(mask, col):
+            # real "over" compositing: the layer has the full colour everywhere and the mask as alpha.
+            # (paste() with a mask also mixed the transparent white into the colour of the soft edge
+            # pixels - every letter got a light rim when the PNG was placed on paper or into a PDF)
+            layer = Image.new("RGBA", (W, H), col + (255,))
+            layer.putalpha(mask)
+            return Image.alpha_composite(img, layer)
         for kind, col, wd in (("grid", (214, 221, 237), 0.2), ("line", (188, 198, 224), 0.25)):
             segs = [[(a, b), (c, e)] for a, b, c, e, kk in pg.rules if kk == kind]
             if segs:
-                m = draw_layer(segs, wd)
-                img.paste(Image.new("RGBA", (W, H), col + (255,)), (0, 0), m)
+                img = put(draw_layer(segs, wd), col)
         if pg.ink:
-            m = draw_layer(pg.ink, pen, pg.ink_w)
-            img.paste(Image.new("RGBA", (W, H), rgb + (255,)), (0, 0), m)
+            img = put(draw_layer(pg.ink, pen, pg.ink_w), rgb)
         if pg.marks:
-            m = draw_layer(pg.marks, 0.3)
-            img.paste(Image.new("RGBA", (W, H), (217, 38, 38, 255)), (0, 0), m)
+            img = put(draw_layer(pg.marks, 0.3), (217, 38, 38))
         out = img if transparent else img.convert("RGB")
         tmp = fn + ".tmp"
         out.save(tmp, format="PNG", dpi=(dpi, dpi), optimize=True)
@@ -1745,6 +1806,10 @@ def cmd_render(opt):
                      "transparent": bool(opt.transparent), "markdown": bool(opt.markdown), "font": bool(opt.font),
                      "realism": bool(opt.realism)},
         "settings_line": settings_line(opt, cs["lang"]),
+        # size of every page and where its ink is (mm, origin top left, pen width included): to place pieces
+        # exactly (e.g. digits of a written calculation) use these numbers - never --margin 0 and a guess
+        "page_boxes": [{"width_mm": round(pg.w, 2), "height_mm": round(pg.h, 2),
+                        "ink_mm": list(pg.ink_box) if pg.ink_box else None} for pg in pages],
     }
     if opt.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))

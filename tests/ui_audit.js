@@ -81,7 +81,9 @@
   wv.value = v0; wv.dispatchEvent(new Event('input', { bubbles: true })); await sleep(450);
   downloads.length = 0; $('wSvg').click(); await sleep(500); ok('SVG download', downloads.some(d => /\.svg$/.test(d)), downloads.join(','));
   downloads.length = 0; $('wPdf').click(); await sleep(1200); ok('PDF download', downloads.some(d => /\.pdf$/.test(d)), downloads.join(','));
-  downloads.length = 0; $('wPng').click(); await sleep(1500); ok('PNG download', downloads.some(d => /\.png$/.test(d)), downloads.join(','));
+  // a PNG page needs about 1 s to encode in a slow (background) preview: wait for it instead of a fixed time
+  downloads.length = 0; $('wPng').click(); for (let i = 0; i < 40 && !downloads.some(d => /\.png$/.test(d)); i++) await sleep(200);
+  ok('PNG download', downloads.some(d => /\.png$/.test(d)), downloads.join(','));
   await closeAll();
 
   // ---- settings
@@ -104,6 +106,63 @@
   ok('settings show the saved irregularity', $('setClaudeVar').value === '0.4' && $('setClaudeAlign').value === 'center');
   $('setTarget').value = '10'; $('setMode').value = 'char'; $('setFallback').checked = true;
   $('setClaudeAlign').value = 'left'; $('setClaudeVar').value = '1'; $('btnSettingsSave').click(); await sleep(300);
+  // writing area size (device setting): live while sliding, back on cancel, kept on save, samples unchanged
+  {
+    const w0 = pad.getBoundingClientRect().width, keep = localStorage.getItem('my-handwriting-padsize');
+    const sz = v => { $('setPadSize').value = String(v); $('setPadSize').dispatchEvent(new Event('input', { bubbles: true })); };
+    document.querySelector('[data-act="settings"]').click(); await sleep(300);
+    sz(60); await sleep(50); const w60 = pad.getBoundingClientRect().width;
+    ok('writing area size: smaller while sliding', w60 < w0 * 0.8 && $('setPadSizeVal').textContent === '60 %', w0 + ' → ' + w60);
+    await closeAll(); ok('…back after closing without saving', Math.abs(pad.getBoundingClientRect().width - w0) < 2);
+    document.querySelector('[data-act="settings"]').click(); await sleep(300); sz(70); $('btnSettingsSave').click(); await sleep(300);
+    const w70 = pad.getBoundingClientRect().width;
+    ok('…kept after saving (this device only)', w70 < w0 && localStorage.getItem('my-handwriting-padsize') === '70' && !('padSize' in H.state().settings));
+    document.querySelector('[data-act="settings"]').click(); await sleep(300); sz(100); $('btnSettingsSave').click(); await sleep(300);
+    ok('…100 % = fits the screen again, nothing stored', localStorage.getItem('my-handwriting-padsize') === null &&
+       (keep !== null || Math.abs(pad.getBoundingClientRect().width - w0) < 2));
+    // Ctrl + mouse wheel over the writing area: 10 % steps, 10 % at the least, plain wheel untouched
+    const wh = (dy, ctrl) => { const e = new WheelEvent('wheel', { deltaY: dy, ctrlKey: ctrl, bubbles: true, cancelable: true }); $('padwrap').dispatchEvent(e); return e.defaultPrevented; };
+    const before = pad.getBoundingClientRect().width;
+    ok('plain mouse wheel is left alone', !wh(100, false) && pad.getBoundingClientRect().width === before);
+    ok('Ctrl + wheel down: 10 % smaller', wh(100, true) && localStorage.getItem('my-handwriting-padsize') === '90' && pad.getBoundingClientRect().width < before);
+    for (let i = 0; i < 20; i++) wh(100, true);
+    ok('…not below 10 %', localStorage.getItem('my-handwriting-padsize') === '10' && pad.getBoundingClientRect().width >= 40, pad.getBoundingClientRect().width);
+    // the line names (grey, right side) must not run across the letter on a small writing area
+    const names = () => { const c = pad.getContext('2d'), x0 = Math.floor(pad.width * 0.7), d = c.getImageData(x0, 0, pad.width - x0, pad.height).data; let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (Math.abs(d[i] - 163) < 12 && Math.abs(d[i + 1] - 169) < 12 && Math.abs(d[i + 2] - 187) < 12 && d[i + 3] > 200) n++; return n; };
+    ok('…no line names on a tiny writing area', names() === 0);
+    const tick = $('padOk').getBoundingClientRect();
+    ok('…the save tick fits inside it', tick.width <= pad.getBoundingClientRect().width * 0.45, Math.round(tick.width) + 'px');
+    // the area shrank away from the mouse: Ctrl + wheel on the empty writing side must still work
+    // (it once went to the browser, and Chrome zoomed the whole page)
+    const onMain = (dy) => { const e = new WheelEvent('wheel', { deltaY: dy, ctrlKey: true, bubbles: true, cancelable: true }); document.querySelector('main').dispatchEvent(e); return e.defaultPrevented; };
+    ok('Ctrl + wheel beside the small area still sizes it', onMain(-100) && localStorage.getItem('my-handwriting-padsize') === '20');
+    const ov = new WheelEvent('wheel', { deltaY: -100, ctrlKey: true, bubbles: true, cancelable: true }); $('overview').dispatchEvent(ov);
+    ok('…but over the overview the browser keeps its zoom', !ov.defaultPrevented && localStorage.getItem('my-handwriting-padsize') === '20');
+    for (let i = 0; i < 8; i++) wh(-100, true);
+    ok('Ctrl + wheel up: back to 100 %', localStorage.getItem('my-handwriting-padsize') === null && (keep !== null || Math.abs(pad.getBoundingClientRect().width - w0) < 2));
+    if (keep !== null) localStorage.setItem('my-handwriting-padsize', keep);   // the tester's own size, used after a reload
+  }
+  // line width on the writing area (device setting): thicker/thinner lines, the saved sample is the same
+  {
+    const keepL = localStorage.getItem('my-handwriting-padline'), c = pad.getContext('2d');
+    const inkPx = () => { const d = c.getImageData(0, 0, pad.width, pad.height).data; let n = 0; for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200 && d[i] < 80 && d[i + 2] > 100 && d[i + 1] < 90) n++; return n; };   // opaque ink only (the guide letter is faint)
+    const lw = v => { $('setPadLine').value = String(v); $('setPadLine').dispatchEvent(new Event('input', { bubbles: true })); };
+    H.setCurrent('Q'); await sleep(50); draw(); const thin = inkPx();
+    document.querySelector('[data-act="settings"]').click(); await sleep(300);
+    lw(300); await sleep(50); const thick = inkPx();
+    ok('line width 300 %: the strokes get thicker at once', thick > thin * 1.8 && $('setPadLineVal').textContent === '300 %', thin + ' → ' + thick);
+    await closeAll(); ok('…back after closing without saving', Math.abs(inkPx() - thin) < thin * 0.1);
+    document.querySelector('[data-act="settings"]').click(); await sleep(300); lw(50); $('btnSettingsSave').click(); await sleep(300);
+    ok('…50 % is kept for this device, thinner strokes', localStorage.getItem('my-handwriting-padline') === '50' && inkPx() < thin * 0.8 && !('padLine' in H.state().settings));
+    $('btnClear').click(); await sleep(50);
+    $('btnClear').click(); H.setCurrent('Q'); await sleep(50); draw(); await sleep(30);
+    ok('…an empty area shows nothing extra after saving', H.strokes() === 1);
+    $('btnClear').click();
+    document.querySelector('[data-act="settings"]').click(); await sleep(300); lw(100); $('btnSettingsSave').click(); await sleep(300);
+    ok('…100 % = normal again, nothing stored', localStorage.getItem('my-handwriting-padline') === null);
+    if (keepL !== null) localStorage.setItem('my-handwriting-padline', keepL);
+  }
 
   // ---- language
   $('btnMore').click(); await sleep(100);

@@ -86,6 +86,7 @@ No Claude at hand? **Write text** in the app turns any text into PNG, SVG or PDF
 | <kbd>Esc</kbd> | clear the area |
 | <kbd>←</kbd> <kbd>→</kbd> | previous / next character |
 | <kbd>V</kbd> | guide letter on/off |
+| <kbd>Ctrl</kbd> + mouse wheel | writing area bigger / smaller |
 
 ## 🤖 Use in Claude
 
@@ -154,6 +155,8 @@ the skill folder, newest export in Downloads). All options: `render --help`. Det
   as an app, the browser keeps the data.
 - **Several devices?** Samples stay on the device you write on – **Export** there, **Import** on the other.
 - **Several people?** The button next to the logo adds handwritings.
+- **Writing area too small or too big?** <kbd>Ctrl</kbd> + mouse wheel next to it, or Settings → Writing area size (10–160 %, only this device).
+  Settings → Line width (25–300 %) makes the lines you draw thinner or thicker.
 - **Only one tab at a time:** if the app is open twice, one tab pauses so nothing is overwritten.
 - **Write text** understands `# heading`, `- list`, `[[3/4]]` (fraction) and `[[pagebreak]]`.
 - **Look real** (on by default): every letter a little wider or narrower, a soft tremor, changing pen
@@ -167,7 +170,7 @@ the skill folder, newest export in Downloads). All options: `render --help`. Det
   GitHub Pages logs IP addresses like any web host ([GitHub's privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)).
 - Handwriting is personal data. Treat your sample file and the skill ZIP like a password, and
   **never attach them to a GitHub issue** – a screenshot is enough.
-- Only meant for your own purposes – never for signatures, forged documents or exams.
+- Your handwriting, your choice: notes, homework, letters, applications … – never for signatures or forged documents.
 
 ## 📱 Tested on
 
@@ -175,7 +178,8 @@ the skill folder, newest export in Downloads). All options: `render --help`. Det
 |---|---|
 | Windows 10/11 – Edge, Chrome, Firefox (mouse, touch, pen) | ✅ tested (pen/touch simulated) – also opened as a file |
 | Pen laptops (S Pen, Surface) | ✅ supported: hover detection, palm rejection, eraser |
-| Android, iPhone, iPad (Apple Pencil) | 🟡 phone layout tested; real devices not yet |
+| Android, iPhone (iOS) | ✅ tested on real devices – everything works |
+| iPad (Apple Pencil) | ✅ tested on real devices – everything works |
 | Python script / skill | ✅ Windows, macOS, Linux, Python 3.8+ |
 
 Something wrong on your device? Please [open an issue](https://github.com/HobbyPlayerDev/my-handwriting/issues/new/choose)

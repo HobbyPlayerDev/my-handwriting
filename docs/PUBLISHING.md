@@ -1,6 +1,6 @@
 # Publishing on GitHub
 
-## Check before every release (as of 2026-11-21, version 1.5.1)
+## Check before every release (as of 2026-11-23, version 1.6.0)
 
 | Question | Result |
 |---|---|
@@ -12,7 +12,7 @@
 | Fonts | None shipped. The guide letter uses the system font of the device at runtime (nothing is distributed or saved). |
 | Privacy | No server, no tracking, no cookies, no network requests (except the user opening claude.ai links). GitHub Pages itself logs IP addresses like any web host (GitHub's privacy statement). |
 | Misuse | "Fair use" in help (all languages), README and SKILL.md; no signature feature. |
-| Works for everyone? | Edge/Chromium tested (desktop, 375 px phone, dark mode, pen/touch simulated, file:// and http); Firefox 152 tested headless (start, save, data after restart, ZIP, PDF, back button – file:// and http). Safari and real iPad/Android/pen laptops not yet tried. Old browsers get a "could not start" message. |
+| Works for everyone? | Edge/Chromium tested (desktop, 375 px phone, dark mode, pen/touch simulated, file:// and http); Firefox 152 tested headless (start, save, data after restart, ZIP, PDF, back button – file:// and http). Real Android phone, iPhone and iPad (Safari) tested by the owner (2026-11-23): everything works. Pen laptops not yet tried. Old browsers get a "could not start" message. |
 
 ## First release, step by step (GitHub website + GitHub Desktop)
 
