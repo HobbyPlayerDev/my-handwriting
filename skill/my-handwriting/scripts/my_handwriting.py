@@ -1108,6 +1108,7 @@ class Page:
 
 
 EDGE_AIR = 0.5  # mm between the ink and the page edge - nothing is ever cut off (keep_inside)
+MIN_EDGE = 1.5  # mm: smallest margin of a fixed page (A4, A5, Letter) - it cannot grow like "fit to text"
 
 
 
@@ -1139,6 +1140,10 @@ def build_pages(text, gs, opt):
     ml = opt.margin_left if opt.margin_left is not None else opt.margin
     mr = opt.margin
     mt = mb = opt.margin
+    if ph is not None:
+        # a fixed page cannot grow: keep room for slant, tremor and the pen (with margin 0 a full line ran
+        # into the right edge, and moving it away from the left edge made the right side worse)
+        ml, mr, mt, mb = max(ml, MIN_EDGE), max(mr, MIN_EDGE), max(mt, MIN_EDGE), max(mb, MIN_EDGE)
     content_w = pw - ml - mr
     if content_w < size * 3:
         raise HandwritingError(L("Seite zu schmal für diese Schriftgröße (Ränder/Breite prüfen).",
@@ -1266,6 +1271,8 @@ def keep_inside(pg, pen, fit, paper, grid):
     def shift(lo, hi, size):
         # keep EDGE_AIR between the ink and the edge; a fixed page cannot grow, so there the writing
         # may also move back from the far edge, as far as the near edge allows
+        if not fit and hi - lo > size - 2 * EDGE_AIR:
+            return (size - lo - hi) / 2.0     # wider than the page: centre it
         if lo < EDGE_AIR:
             return EDGE_AIR - lo
         if not fit and hi > size - EDGE_AIR:

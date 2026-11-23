@@ -162,19 +162,31 @@ for (const bad of [{ size: 'abc' }, { variation: 'x' }, { margin: 'q', page: 'au
 }
 // nothing sticks out of the page: margin 0 with slant/tremor/pen width once cut off the left of "0" and "1"
 {
-  const inside = (pg, pen) => pg.ink.every(s => s.every(p => p[0] - pen / 2 >= 0.49 && p[1] - pen / 2 >= 0.49 &&
-    p[0] + pen / 2 <= pg.w - 0.49 && p[1] + pen / 2 <= pg.h - 0.49));
+  // the rule keepInside keeps: 0.5 mm of air between the page edge and the ink, the ink being the stroke
+  // centre plus half the widest pen of this page (pen 7.5 % of the size x the largest pressure factor)
+  const half = (pg, size) => size * 0.075 * Math.max(1, ...(pg.inkW || [1])) / 2;
+  const inside = (pg, size, sides) => pg.ink.every(s => s.every(p => {
+    const h = half(pg, size) - 1e-6;
+    return p[0] - h >= 0.5 && p[1] - h >= 0.5 && (sides === 'lt' || (p[0] + h <= pg.w - 0.5 && p[1] + h <= pg.h - 0.5));
+  }));
   let moved = 0;
   for (let seed = 1; seed <= 40; seed++) {
     const o = { page: 'auto', width: 30, margin: 0, size: 8, variation: 2, realism: true, seed, font: FONT, paper: seed % 2 ? 'lined' : 'grid' };
-    const pg = R.buildPages(String(seed % 10) + '01', gs, o).pages[0], pen = 8 * 0.075 * 1.25;
-    ok(inside(pg, pen), 'margin 0, seed ' + seed + ': ink inside the page');
+    const pg = R.buildPages(String(seed % 10) + '01', gs, o).pages[0];
+    ok(inside(pg, 8), 'margin 0, seed ' + seed + ': ink inside the page');
     ok(pg.inkBox && pg.inkBox[0] >= 0.49 && pg.inkBox[2] <= pg.w, 'ink box seed ' + seed);
     if (pg.w > 30) moved++;
   }
   ok(moved > 0, 'margin 0: the page grew for overhanging ink (' + moved + ' of 40)');
   const a4 = R.buildPages('0'.repeat(60), gs, { page: 'a4', margin: 0, size: 8, variation: 2, realism: true, seed: 3, font: FONT }).pages[0];
-  ok(a4.w === 210 && inside(a4, 0.75), 'A4 with margin 0: page size kept, ink moved inside');
+  ok(a4.w === 210 && a4.h === 297 && inside(a4, 8), 'A4 with margin 0: page size kept, all ink inside');
+  // a full line on a fixed page with margin 0, many seeds and wide letters: inside on every side
+  let wideOk = 0;
+  for (let seed = 1; seed <= 15; seed++) {
+    const pgs = R.buildPages('W0mW0m '.repeat(40), gs, { page: 'a5', margin: 0, size: 8, variation: 2, realism: true, seed, font: FONT }).pages;
+    if (pgs.every(p => p.w === 148 && inside(p, 8))) wideOk++;
+  }
+  ok(wideOk === 15, 'full lines on A5 with margin 0: inside on every side (' + wideOk + ' of 15)');
   const normal = R.buildPages('Hallo', gs, { page: 'a4', seed: 1, font: FONT }).pages[0];
   ok(normal.inkBox[0] > 15, 'normal margins: nothing moved');
 }

@@ -641,6 +641,9 @@
     if (o.page === 'auto') { pw = o.width; ph = null; }
     else { var ps = PAGE_SIZES[o.page] || PAGE_SIZES.a4; pw = ps[0]; ph = ps[1]; if (o.landscape) { var tmp = pw; pw = ph; ph = tmp; } }
     var ml = o.margin, mr = o.margin, mt = o.margin, mb = o.margin;
+    // a fixed page cannot grow: keep room for slant, tremor and the pen (with margin 0 a full line ran
+    // into the right edge, and moving it away from the left edge made the right side worse)
+    if (ph !== null) { ml = Math.max(ml, MIN_EDGE); mr = Math.max(mr, MIN_EDGE); mt = Math.max(mt, MIN_EDGE); mb = Math.max(mb, MIN_EDGE); }
     var contentW = Math.max(size * 3, pw - ml - mr), maxW = contentW / size - 0.15;
     var lineH = o.lineSpacing || o.lineHeight * size, first = mt + size * 1.3, grid = 5;
     if (o.paper === 'grid') { lineH = Math.max(grid, Math.round(lineH / grid) * grid); first = Math.ceil(first / grid) * grid; }
@@ -714,7 +717,7 @@
   // Nothing may stick out of the page (same rule as keep_inside in the Python skill): slant, tremor, pen
   // pressure and the pen width can carry a stroke past a margin of 0 - it was cut off ("0" looked open).
   // Move the writing in by the overhang and, for "fit to text", let the page grow. pg.inkBox = visible ink.
-  var EDGE_AIR = 0.5;
+  var EDGE_AIR = 0.5, MIN_EDGE = 1.5;   // mm: air kept by keepInside / smallest margin of a fixed page
   function keepInside(pg, pen, fit, paper, grid) {
     var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     pg.ink.concat(pg.marks).forEach(function (st) { st.forEach(function (p) {
@@ -724,6 +727,7 @@
     var half = pen * Math.max(1, pg.inkW && pg.inkW.length ? Math.max.apply(null, pg.inkW) : 1) / 2;
     x0 -= half; y0 -= half; x1 += half; y1 += half;
     var shift = function (lo, hi, size) {
+      if (!fit && hi - lo > size - 2 * EDGE_AIR) return (size - lo - hi) / 2;   // wider than the page: centre it
       if (lo < EDGE_AIR) return EDGE_AIR - lo;
       if (!fit && hi > size - EDGE_AIR) return -Math.min(hi - (size - EDGE_AIR), lo - EDGE_AIR);
       return 0;

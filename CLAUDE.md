@@ -206,6 +206,10 @@ come from: command line > `settings.claude` of the exported file > `CLAUDE_DEFAU
     up-stroke. `keepInside` / `keep_inside` after building the pages moves ink + marks + lines inside
     (0.5 mm air incl. half the widest pen), lets "fit to text" pages grow, rebuilds the grid; the report
     gives `page_boxes` (page size + `ink_mm`) so Claude aligns pieces by ink, never by the image edge.
+    A fixed page (A4/A5/Letter) cannot grow: its margins are at least `MIN_EDGE` 1.5 mm, and ink wider than
+    the page is centred - with margin 0 a full line ran into the right edge, and moving it away from the
+    left made it worse. Only GitHub's Linux fixture (DejaVu, wider letters) showed it: test with several
+    fixture fonts (`make_fixture.py` with another `FONTS` list) when a test depends on letter widths.
 30. Transparent PNG (Python): `img.paste(colour, mask)` on a transparent white canvas mixed white into the
     soft edge pixels → a light rim around every letter once placed on paper/into a PDF. Composite with
     `Image.alpha_composite` (colour layer, alpha = mask). The app's canvas was never affected.
